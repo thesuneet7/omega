@@ -75,6 +75,9 @@ fn save_logs_to_file(log_file: &SessionLogFile) -> Result<PathBuf, String> {
 }
 
 fn main() {
+    // Load local .env if present so users don't need manual exports every run.
+    let _ = dotenvy::dotenv();
+
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         Some("phase2") => {

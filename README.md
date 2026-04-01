@@ -196,11 +196,15 @@ Phase 2 turns the Phase 1 session log into an ingestion artifact that contains:
 
 Uses the **Gemini embeddings API** by default.
 
-```bash
-export OMEGA_EMBEDDING_BACKEND=gemini
-export OMEGA_GEMINI_API_KEY="..."
-export OMEGA_EMBED_MODEL="text-embedding-004"   # optional
+Create a local `.env` file once (already supported by the app):
 
+```bash
+cp .env.example .env
+```
+
+Then fill your key in `.env` and run normally:
+
+```bash
 cargo run -- phase2 --input logs/capture-session-*.json
 ```
 
