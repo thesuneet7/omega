@@ -68,7 +68,7 @@ impl SensorEngine {
             capture_cooldown: Duration::from_millis(500),
             scroll_pending: false,
             last_scroll_instant: None,
-            scroll_idle_delay: Duration::from_millis(1500),
+            scroll_idle_delay: Duration::from_millis(1000),
             #[cfg(target_os = "macos")]
             vision_helper_binary,
         }

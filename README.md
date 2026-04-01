@@ -186,11 +186,15 @@ Those embeddings then feed Phase 3 (semantic stitching) and Phase 4 (summaries).
 
 ## Phase 2 (Ingestion) — Run it
 
-Phase 2 turns the Phase 1 session log into an ingestion artifact that contains:
+Phase 2 turns the Phase 1 session log into a production-ready ingestion pipeline:
 
 - Canonical text per capture (metadata + OCR)
-- A stable SHA-256 fingerprint of that canonical text
-- An embedding vector per capture
+- Optional PII redaction (email/phone/card-like patterns)
+- Smart chunking with overlap for long OCR blocks
+- Embeddings per chunk (document task type)
+- SQLite persistence (`logs/phase2.db`) for captures/chunks/embeddings
+- Deduplication by hash to avoid re-embedding repeated data
+- Retry + exponential backoff for 429/5xx embedding API responses
 
 ### Run with cloud embeddings (recommended)
 
@@ -207,6 +211,11 @@ Then fill your key in `.env` and run normally:
 ```bash
 cargo run -- phase2 --input logs/capture-session-*.json
 ```
+
+By default this writes:
+
+- JSON artifact: `logs/phase2-ingestion-<unix_ts>.json`
+- SQLite DB: `logs/phase2.db`
 
 Optional (custom Gemini endpoint):
 
@@ -234,5 +243,16 @@ This uses a deterministic hash-based embedding (not semantic; for pipeline valid
 ```bash
 export OMEGA_EMBEDDING_BACKEND=hash
 cargo run -- phase2 --input logs/capture-session-*.json
+```
+
+### Phase 2 tuning knobs
+
+```bash
+OMEGA_PHASE2_DB_PATH=logs/phase2.db
+OMEGA_CHUNK_SIZE_CHARS=1200
+OMEGA_CHUNK_OVERLAP_CHARS=200
+OMEGA_REDACT_PII=true
+OMEGA_EMBED_MAX_RETRIES=3
+OMEGA_EMBED_RETRY_BASE_DELAY_MS=500
 ```
 
