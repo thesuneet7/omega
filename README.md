@@ -4,6 +4,27 @@ This project implements **Phase 1: The Sensor Layer (Smart Capture)** of your sy
 
 The goal of Phase 1 is: **collect the maximum useful signal with the minimum CPU, memory, and disk**, while keeping everything on-device.
 
+### Collaborator Quickstart (clone and run)
+
+This repo is designed to run natively (host machine), including global input/screen capture.
+Use `req.txt` to install and verify local prerequisites first.
+
+```bash
+git clone <your-repo-url>
+cd omega
+cat req.txt
+cp .env.example .env
+# Fill OMEGA_GEMINI_API_KEY in .env
+
+# 1) Run Phase 1 natively
+cargo run -- capture
+
+# Stop with Ctrl+C after activity is captured.
+
+# 2) Run Phase 2 natively
+cargo run -- phase2
+```
+
 ---
 
 ### High-Level Flow

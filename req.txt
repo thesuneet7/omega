@@ -1,0 +1,21 @@
+# Omega native requirements (macOS-focused)
+# Install these once on a collaborator machine before running the pipeline.
+
+# 1) Rust toolchain (cargo, rustc)
+rustup
+
+# 2) Apple command-line tools (needed for swiftc/Vision OCR helper)
+xcode-command-line-tools
+
+# 3) OCR fallback engine
+tesseract
+
+# 4) Runtime availability checks used by the app
+osascript
+
+# Setup commands:
+# brew install rustup-init tesseract
+# rustup-init -y
+# xcode-select --install
+# cp .env.example .env
+# then set OMEGA_GEMINI_API_KEY in .env
