@@ -1,0 +1,46 @@
+{
+  "summary": {
+    "db_path": "logs/phase2.db",
+    "generated_at_epoch_secs": 1775080170,
+    "prompt_version": "phase4-v1",
+    "backend": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "buckets_total": 1,
+    "summaries_written": 1,
+    "summaries_skipped_unchanged": 0,
+    "summaries_failed": 0,
+    "dry_run": false,
+    "force": false,
+    "max_input_chars": 48000
+  },
+  "summaries": [
+    {
+      "bucket_id": 1,
+      "title": "Researching Joint MS/MBA Programs at Harvard and Stanford",
+      "one_liner": "The user is researching the application processes and selection criteria for joint Master of Science/Master of Business Administration programs at Harvard and Stanford, comparing the requirements for deferred and regular tracks.",
+      "detailed_summary": "The user is investigating the application processes for joint MS/MBA programs at Harvard and Stanford. They are comparing the 'Dual Gate' system at Harvard, which involves sequential reviews by the MBA and MS admissions boards, with Stanford's 'Parallel Gate' system, requiring separate applications to the GSB and CS department. The user is also considering the implications of applying via deferred vs. regular tracks, focusing on how their current academic and professional achievements (Flipkart APM, IIT Kanpur Rank 1, BCG internship) will be evaluated.",
+      "primary_apps": [
+        "Safari",
+        "Cursor"
+      ],
+      "tags": [
+        "education",
+        "admissions",
+        "masters",
+        "mba",
+        "career",
+        "research",
+        "harvard",
+        "stanford"
+      ],
+      "confidence_0_1": 1.0,
+      "caveats": null,
+      "input_fingerprint": "45f33816ec61b48bff0e9c42ddc887efe6772f8717765f1f163942791512cf8a",
+      "chunk_count": 29,
+      "input_chars": 27483,
+      "input_truncated": false,
+      "first_seen_epoch_secs": 1774958148,
+      "last_seen_epoch_secs": 1774958282
+    }
+  ]
+}

@@ -364,7 +364,7 @@ Phase 4 turns each **task bucket** into a **structured, human-readable summary**
 
 **By default, summaries come from the Gemini API** (`OMEGA_PHASE4_BACKEND=gemini`, same key as Phase 2). The only alternative is **`stub`**, which does **not** call an LLM — it writes deterministic placeholder text for tests or air‑gapped runs. There is no other summarization path in this repo.
 
-- **Idempotency**: Skips a bucket when the **input fingerprint** (SHA-256 of sorted chunk hashes) is unchanged **and** the stored **`prompt_version`** matches the current binary (so you do not pay for duplicate API calls on re-runs).
+- **Idempotency**: Skips a bucket when the **input fingerprint** (SHA-256 of sorted chunk hashes) is unchanged **and** the stored **`prompt_version`**, **`backend`**, and **`model`** match the current run (so switching `OMEGA_PHASE4_BACKEND` or `OMEGA_PHASE4_MODEL` does not leave stale stub text while “skipping”).
 - **Prompt upgrades**: When you bump `PROMPT_VERSION` in code, existing rows are **re-summarized** automatically unless you rely on unchanged fingerprints only — the version check forces refresh when the prompt/schema changes.
 - **Retries**: Same exponential backoff pattern as Phase 2 for 429/5xx on Gemini.
 - **Large buckets**: Long OCR is **truncated** head/tail with an explicit marker (`OMEGA_PHASE4_MAX_INPUT_CHARS`, default 48k).

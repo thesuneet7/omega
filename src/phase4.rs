@@ -227,11 +227,18 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
             continue;
         }
         let fingerprint = fingerprint_for_bucket(&agg.chunk_hashes);
+        let want_backend = backend_label(&config.backend);
         if !config.force {
-            if let Some((existing_fp, stored_prompt_ver)) =
+            if let Some((existing_fp, stored_prompt_ver, stored_backend, stored_model)) =
                 existing_summary_meta(&conn, bucket.bucket_id)?
             {
-                if existing_fp == fingerprint && stored_prompt_ver == PROMPT_VERSION {
+                // Must match backend/model too — otherwise switching stub→gemini (or changing
+                // OMEGA_PHASE4_MODEL) would still skip and leave stale JSON in the artifact.
+                if existing_fp == fingerprint
+                    && stored_prompt_ver == PROMPT_VERSION
+                    && stored_backend == want_backend
+                    && stored_model == config.model
+                {
                     skipped += 1;
                     if let Some(row) = load_summary_row(&conn, bucket.bucket_id)? {
                         summaries.push(row);
@@ -523,12 +530,22 @@ CREATE TABLE IF NOT EXISTS task_bucket_summaries (
     Ok(())
 }
 
-fn existing_summary_meta(conn: &Connection, bucket_id: i64) -> Result<Option<(String, String)>> {
-    let row: Option<(String, String)> = conn
+fn backend_label(b: &SummarizeBackend) -> &'static str {
+    match b {
+        SummarizeBackend::Gemini => "gemini",
+        SummarizeBackend::Stub => "stub",
+    }
+}
+
+fn existing_summary_meta(
+    conn: &Connection,
+    bucket_id: i64,
+) -> Result<Option<(String, String, String, String)>> {
+    let row: Option<(String, String, String, String)> = conn
         .query_row(
-            "SELECT input_fingerprint, prompt_version FROM task_bucket_summaries WHERE bucket_id = ?1",
+            "SELECT input_fingerprint, prompt_version, backend, model FROM task_bucket_summaries WHERE bucket_id = ?1",
             params![bucket_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()
         .context("read summary meta")?;

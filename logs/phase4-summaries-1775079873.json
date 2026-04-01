@@ -1,0 +1,41 @@
+{
+  "summary": {
+    "db_path": "logs/phase2.db",
+    "generated_at_epoch_secs": 1775079873,
+    "prompt_version": "phase4-v1",
+    "backend": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "buckets_total": 1,
+    "summaries_written": 0,
+    "summaries_skipped_unchanged": 1,
+    "summaries_failed": 0,
+    "dry_run": false,
+    "force": false,
+    "max_input_chars": 48000
+  },
+  "summaries": [
+    {
+      "bucket_id": 1,
+      "title": "Bucket 1 (stub)",
+      "one_liner": "Stub backend — set OMEGA_PHASE4_BACKEND=gemini for real summaries.",
+      "detailed_summary": "This is a deterministic offline summary. Content preview: ### segment (app=Safari, window=Unknown Window, ts=1774958148) app: Safari content: Flipkart APM v Sign in - McKi... Apply to the Y... &S OpenClaw Arc... Tue 31 Mar 5:25 PM Top Computer Science Univer...",
+      "primary_apps": [
+        "Cursor",
+        "System Settings",
+        "Safari"
+      ],
+      "tags": [
+        "stub",
+        "offline"
+      ],
+      "confidence_0_1": 0.1,
+      "caveats": "OMEGA_PHASE4_BACKEND=stub",
+      "input_fingerprint": "45f33816ec61b48bff0e9c42ddc887efe6772f8717765f1f163942791512cf8a",
+      "chunk_count": 29,
+      "input_chars": 27483,
+      "input_truncated": false,
+      "first_seen_epoch_secs": 1774958148,
+      "last_seen_epoch_secs": 1774958282
+    }
+  ]
+}
