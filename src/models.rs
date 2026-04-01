@@ -13,6 +13,8 @@ pub struct VisualLogItem {
     /// For now we just store dimensions to keep the model lightweight.
     pub width: u32,
     pub height: u32,
+    pub ocr_engine_used: String,
+    pub ocr_text: String,
 }
 
 /// Unified payload that Phase 1 emits for Phase 2 ingestion.

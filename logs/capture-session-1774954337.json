@@ -1,0 +1,312 @@
+{
+  "session_summary": {
+    "session_start_epoch_secs": 1774954120,
+    "session_end_epoch_secs": 1774954337,
+    "session_duration_secs": 216,
+    "total_events_seen": 91,
+    "accepted_captures": 21,
+    "dropped_by_phash": 70,
+    "per_event_counts": {
+      "KeyPress": 6,
+      "MouseClick": 3,
+      "Scroll": 82
+    },
+    "saved_payload_count": 21
+  },
+  "payloads": [
+    {
+      "Visual": {
+        "id": 1,
+        "timestamp": {
+          "secs_since_epoch": 1774954125,
+          "nanos_since_epoch": 519424000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 2,
+        "timestamp": {
+          "secs_since_epoch": 1774954127,
+          "nanos_since_epoch": 866183000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 3,
+        "timestamp": {
+          "secs_since_epoch": 1774954134,
+          "nanos_since_epoch": 383886000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "MouseClick",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 4,
+        "timestamp": {
+          "secs_since_epoch": 1774954139,
+          "nanos_since_epoch": 187838000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 5,
+        "timestamp": {
+          "secs_since_epoch": 1774954141,
+          "nanos_since_epoch": 496783000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 6,
+        "timestamp": {
+          "secs_since_epoch": 1774954146,
+          "nanos_since_epoch": 183045000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 7,
+        "timestamp": {
+          "secs_since_epoch": 1774954148,
+          "nanos_since_epoch": 594392000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 8,
+        "timestamp": {
+          "secs_since_epoch": 1774954185,
+          "nanos_since_epoch": 822286000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 9,
+        "timestamp": {
+          "secs_since_epoch": 1774954199,
+          "nanos_since_epoch": 844887000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 10,
+        "timestamp": {
+          "secs_since_epoch": 1774954204,
+          "nanos_since_epoch": 537609000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 11,
+        "timestamp": {
+          "secs_since_epoch": 1774954209,
+          "nanos_since_epoch": 326784000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 12,
+        "timestamp": {
+          "secs_since_epoch": 1774954211,
+          "nanos_since_epoch": 723120000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 13,
+        "timestamp": {
+          "secs_since_epoch": 1774954218,
+          "nanos_since_epoch": 925821000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 14,
+        "timestamp": {
+          "secs_since_epoch": 1774954221,
+          "nanos_since_epoch": 215227000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 15,
+        "timestamp": {
+          "secs_since_epoch": 1774954225,
+          "nanos_since_epoch": 792119000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 16,
+        "timestamp": {
+          "secs_since_epoch": 1774954232,
+          "nanos_since_epoch": 769643000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 17,
+        "timestamp": {
+          "secs_since_epoch": 1774954255,
+          "nanos_since_epoch": 768634000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 18,
+        "timestamp": {
+          "secs_since_epoch": 1774954281,
+          "nanos_since_epoch": 261223000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 19,
+        "timestamp": {
+          "secs_since_epoch": 1774954304,
+          "nanos_since_epoch": 472529000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 20,
+        "timestamp": {
+          "secs_since_epoch": 1774954309,
+          "nanos_since_epoch": 131424000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800
+      }
+    },
+    {
+      "Visual": {
+        "id": 21,
+        "timestamp": {
+          "secs_since_epoch": 1774954334,
+          "nanos_since_epoch": 854562000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800
+      }
+    }
+  ]
+}

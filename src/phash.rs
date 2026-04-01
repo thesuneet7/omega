@@ -1,4 +1,4 @@
-use image::{imageops::FilterType, DynamicImage, GenericImageView, Luma};
+use image::{imageops::FilterType, DynamicImage, Luma};
 
 /// Simple perceptual hash implementation using DCT on a downscaled grayscale image.
 pub fn compute_phash(img: &DynamicImage) -> [u8; 8] {
@@ -10,7 +10,7 @@ pub fn compute_phash(img: &DynamicImage) -> [u8; 8] {
     for y in 0..32 {
         for x in 0..32 {
             let Luma([v]) = resized.get_pixel(x, y);
-            pixels[y * 32 + x] = *v as f32;
+            pixels[(y as usize) * 32 + (x as usize)] = *v as f32;
         }
     }
 
@@ -21,7 +21,7 @@ pub fn compute_phash(img: &DynamicImage) -> [u8; 8] {
             let mut sum = 0.0;
             for x in 0..32 {
                 for y in 0..32 {
-                    let pixel = pixels[y * 32 + x];
+                    let pixel = pixels[(y as usize) * 32 + (x as usize)];
                     let cu = if u == 0 { (1.0 / 2.0f32).sqrt() } else { 1.0 };
                     let cv = if v == 0 { (1.0 / 2.0f32).sqrt() } else { 1.0 };
                     let theta_u = (std::f32::consts::PI * (2 * x + 1) as f32 * u as f32) / 64.0;
@@ -63,4 +63,3 @@ pub fn similarity(a: &[u8; 8], b: &[u8; 8]) -> f32 {
     let dist = hamming_distance(a, b) as f32;
     1.0 - dist / 64.0
 }
-

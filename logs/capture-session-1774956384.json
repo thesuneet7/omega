@@ -1,0 +1,437 @@
+{
+  "session_summary": {
+    "session_start_epoch_secs": 1774956186,
+    "session_end_epoch_secs": 1774956384,
+    "session_duration_secs": 197,
+    "total_events_seen": 41,
+    "accepted_captures": 28,
+    "dropped_by_phash": 13,
+    "per_event_counts": {
+      "KeyPress": 2,
+      "Scroll": 39
+    },
+    "saved_payload_count": 28
+  },
+  "payloads": [
+    {
+      "Visual": {
+        "id": 1,
+        "timestamp": {
+          "secs_since_epoch": 1774956197,
+          "nanos_since_epoch": 978437000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee He omega Upgrade to Pro (=) @B <>\n® Qaqep Bey {} capture-session-1774954337,json UX > %2 (J -: — ystem blueprint phase prioritizati + © --\nlogs > {} capture-session-1774954337,json > ... Review Next File Noicee! But now i think we should add\n> .qodo — the OCR to see what it extracts from\n> logs e 1 { each accepted screeshots so that we\n> src e \"session_summary\": { its i >)\n> target 5 'SeSaHon_Sit_Syod)_SaEs\"e 1774954120, cargo run\n_ \"session_end_epoch_secs\": 1774954337,\n= Cargo.lock MM \"session_duration_secs\": 216, bo activit th fl\n© Cargo.toml M \"total_events_seen\": 91, 0 activi yon SENSE en an +C.\n¥ High level Blueprint 3331fd... \"accepted_captures\": 21, Open Ps filein logs/ and inspect pay\n\"dropped_by_phash\": 70, loads [].Visual.ocr_text .\n\"per_event_counts\": {\n\"KeyPress\": 6, One important note\n“MouseC Lick\": 3 This uses the tesseract CLI at runtime.\nSerouw\"s G2 If OCR text shows error markers, install it:\n}\n,\n“saved_payload_count\": 21 brew install tesseract\n},\n\"payloads\": [\n{ If you want, | can next add:\n\"Visual\": { ° confidence/quality heuristics (ignore\n\"id\": 1, tiny/garbled OCR),\n\"timestamp\": { : .\n“secs_since epoch\": 1774954125, conan + hashing for super long\n“nanos_since_epoch\": 519424000 OCR output,\nProblems Output DebugConsole Terminal Ports @Jsensorlayer AV +-»- (] WW -- ~ x * and a side-by-side debug file with\n. timestamp + event type + first 200\n(base) suneet@SUNEETs—-MacBook-Air omega % cargo run h fF OCR f ick .\nCompiling sensor_layer v@.1.@ (/Users/suneet/Desktop/Folders/omega) CMELS @) Of QUICK scanning.\nFinished ‘dev’ profile [unoptimized + debuginfo] target(s) in 2.71s\nRunning ‘target/debug/sensor_layer~ os\nListening for global input events. Move/click/scroll to generate captures.\nPress Ctrl+C to stop and save logs to ./logs/x.json\n|\n> 2Files Undo All Keep All (RBview)\ncov Auto v Gal ru)\n#K to generate command\nxXx VUmaint C omega MO0AD Cursor Tab Ln1,Col1 Spaces:2 UTF-8 LF {} JSON @ GoLive _ Qodo Qa\nQo\na"
+      }
+    },
+    {
+      "Visual": {
+        "id": 2,
+        "timestamp": {
+          "secs_since_epoch": 1774956203,
+          "nanos_since_epoch": 949288000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "KeyPress",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee &) Flipkart APM v < > @ =) gemini.google.com @ ©) Vy & a +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n2 The short answer is: You lose 0% of the value of your current achievements. In fact, for\nNew chat . . . .\nG elite programs like Harvard (HBS) or Stanford, these \"stats\" actually gain value when paired\n& Mystuff with high-impact work experience.\nGems In the world of elite admissions, your achievements are categorized as either \"Permanent\nSignals\" or \"Foundational Signals.\" Here is the breakdown of how your specific stats will be\nChats weighted 3 years from now.\nTop Computer Science Universities Gl... 1. The \"Permanent Signals\" (0% Value Decay)\nAutomated Research Synthesis Tool... These are achievements that define your intellectual \"ceiling.\" They never expire and are just as\nAl Ospscwuaitica a Dark te impressive at age 28 as they are at age 21.\n. ¢ Department Rank 1 (Chemistry, IITK): This is a lifetime credential. Being the top student\nAl for Shadow Documentation\nin your department at a premier global institution is a permanent marker of discipline and\nProduct Management's Intrinsic Diff... raw intelligence. Whether you apply now or in 5 years, this remains the single strongest\nProduct Management's Toughest Cha... proof of your academic rigor.\n. ¢ 25+ Citations & Research: Research impact is cumulative. If your papers are high-quality,\non this the \"12th\" day of \"March\" - pl...\nthose 25 citations will likelv arow to 40 or 50 bv the time vou apply. A \"Product Leader\"\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ °= Tools Thinking v u\n© Settings and help e\nGemini is Al and can make mistakes.\n4 ) F ; ces & | Fal : 5 we 7 P\n8 e"
+      }
+    },
+    {
+      "Visual": {
+        "id": 3,
+        "timestamp": {
+          "secs_since_epoch": 1774956209,
+          "nanos_since_epoch": 815759000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n[4 New chat * CS Minor & Systems/ML Coursework: Your grades in these courses are locked into your\nlew cha\ntranscript. They serve as the permanent \"Technical Proof\" that you can handle the MS\n& Mystuff portion of a joint degree.\nGems > 2. The \"Foundational Signals” (Strategic Evolution)\nch These don't lose value; they move from the \"main event\" to the \"origin story.\" They prove that\nats\nyour success at Flipkart wasn't an accident.\nop Computer Science Universities G ¢ National Hackathon Wins & Builds: These prove you have \"Builder DNA.\" While your\nAutomated Research Synthesis Tool... future projects at Flipkart will be “at scale,\" your college hackathon wins prove you have\nthe grit to build something from zero.\nAl Opportunities in Dark Data\n¢ HPAIR Selection: Being in the top 2% of delegates globally is a \"Selectivity Signal.\" It tells\nAl f h D tati 9 9 amp 9 : we\nor Shadow Documentation the committee that you have been identified as a high-potential leader by elite institutions\nProduct Management's Intrinsic Diffi... long before you entered the workforce.\nProduct Management's Toughest Cha... ¢ BCG Internship: This is your \"Professional Pedigree.\" It shows that even as a student, you\nwere vetted and selected by the world’s top strategy firm.\non this the \"12th\" day of \"March\" - pl...\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 : &g ; ces & | Fal : 5 we 7 P)\naD Ys is"
+      }
+    },
+    {
+      "Visual": {
+        "id": 4,
+        "timestamp": {
+          "secs_since_epoch": 1774956220,
+          "nanos_since_epoch": 209426000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n[4 New chat successful leader. If you apply after 2 years at Flipkart, you have proven it.\nlew cha\nMy stuff\n& Me Achievement Weighting (Now - Senior Year) | Weighting (Post-Flipkart)\nGems > . . . .\nAcademics (DR1) 70% (Main Evidence) 40% (Foundation of Excellence)\nChats .\nWork Impact 10% (Potential) 50% (Proof of Scale)\nTop Computer Science Universities Gl...\n. Research/Citations 20% 10% (Unique \"Spike\")\nAutomated Research Synthesis Tool...\nAl Opportunities in Dark Data\nPP f8 Export to Sheets 0\nAl for Shadow Documentation\nProduct Management's Intrinsic Diffi... The \"Value Add\" of waiting:\nWhen you apply later, you aren't \"losing\" your DR1 status; you are adding a \"Flipkart APM\"\nProduct M t's Toughest Cha... . . . .\nES Is layer on top of it. In the eyes of Harvard or Stanford, a \"Rank 1 Chemist who is also a top-tier\non this the \"12th\" day of \"March\" - pl... Product Leader\" is a significantly more \"non-negotiable\" admit than just a \"Rank 1 Chemist.\"\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 ; ces Gs | a : 6),6.8).0) 7°"
+      }
+    },
+    {
+      "Visual": {
+        "id": 5,
+        "timestamp": {
+          "secs_since_epoch": 1774956226,
+          "nanos_since_epoch": 5057000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nThe \"Value Add\" of waiting:\n(Z Newchat : . .\nWhen you apply later, you aren't \"losing\" your DR1 status; you are adding a \"Flipkart APM\"\n& Mystuff layer on top of it. In the eyes of Harvard or Stanford, a \"Rank 1 Chemist who is also a top-tier\nProduct Leader\" is a significantly more \"non-negotiable\" admit than just a \"Rank 1 Chemist.\"\nGems >\nHow to ensure \"Zero Decay”\nChats . oy. . .\nTo make sure these stats remain high-value, you just need to avoid the \"Plateau Trap.” If you\nTop Computer Science Universities Gl... are Rank 1 at IITK but then do \"average\" work at Flipkart, the Rank 1 starts to look like a fluke.\n. But if you are Rank 1 at IITK and then become a \"Star Performer\" at Flipkart, the Rank 1\nAutomated Research Synthesis Tool...\nbecomes part of a consistent pattern of excellence.\nAl Opportunities in Dark Data\nYour strategy should be:\nAl for Shadow Documentation\n1. Lock the \"Stats\": Get the official Rank 1 certificates and keep your research co-authors\nProduct Management's Intrinsic Diff... close.\nProduct Management's Toughest Cha... 2. Focus on \"Impact\" at Flipkart: Ensure your professional story is as elite as your\nmic story.\non this the \"12th\" day of \"March\" - pl... lee Tall TY\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes."
+      }
+    },
+    {
+      "Visual": {
+        "id": 6,
+        "timestamp": {
+          "secs_since_epoch": 1774956231,
+          "nanos_since_epoch": 925371000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n\n1. Lock the \"Stats\": Get the official Rank 1 certificates and keep your research co-authors\n(4 Newchat close.\n& My stuff 2. Focus on “Impact” at Flipkart: Ensure your professional story is as elite as your\n\nacademic story.\n\nGems > . . \"\n\n3. The Narrative: When you apply in 2-3 years, you frame your college stats as: \"/ mastered\nChat the most rigorous academic environment in my country (IITK), and then | applied that\n\nats\nsame discipline to scale Al products for 10OM+ people (Flipkart).\"\n\nTop Computer Science Universities Gl...\n\nYou are not losing anything by waiting; you are simply building a more \"expensive\" resume.\nAutomated Research Synthesis Tool...\n\nDoes this help lower the anxiety about the \"deferred vs. regular\" choice?\nAl Opportunities in Dark Data\nAl for Shadow Documentation\nProduct Management's Intrinsic Diffi...\n\nso my concern is that as the academics part constitute J\nProduct Management's Toughest Cha... ; ; ;\n70% as of right now and it constitutes 40% after - anda\non this the \"12th\" day of “March” - pl... 10% of work ex has become 50% i fear that there would\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n— & (ted 3 (=) r e 2\n4 31 N Oo » z"
+      }
+    },
+    {
+      "Visual": {
+        "id": 7,
+        "timestamp": {
+          "secs_since_epoch": 1774956237,
+          "nanos_since_epoch": 580945000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee Flipkart APM v < > @ =) gemini.google.com @ (0) 1) éo3 th +\n(7) APM Season | 20... @@ Sign in - McKinse... Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini ) > (124) YouTube\nyD\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n+> Show thinking v\n(Z Newchat\nSr My stuff The concern that the professional landscape will be crowded with “better” candidates is\nG common, but it stems from a misunderstanding of how elite admissions committees (HBS,\nems >\nStanford, etc.) view \"Pre-Filtered\" talent.\nChats In the global applicant pool for joint MS/MBA or top MBA programs, there is a distinct hierarchy\nTop Computer Science Universities Gl. of work experience. A rotational APM program at a firm like Flipkart—which selects fewer\nthan 10-12 people from the entire IIT system—is already in the top 1% of professional\nAutomated Research Synthesis Tool ... .\ncategories globally.\nAl Opportunities in Dark Data\n1. The Global \"Tier\" of Work Experience\nAl for Shadow Documentation\nTo understand who the competition is, we can categorize the typical applicant pool by the\nProduct Management's Intrinsic Diff... \"Selectivity Signal\" of their employer:\nProduct Management's Toughest Cha...\non this the \"12th\" day of \"March\" - pl... Tier Category Examples Your Standing\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\na 31 ; ces G | a : | 6 | 7 on"
+      }
+    },
+    {
+      "Visual": {
+        "id": 8,
+        "timestamp": {
+          "secs_since_epoch": 1774956243,
+          "nanos_since_epoch": 241035000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\not work experience. A rotational APM program at a firm like Flipkart—which selects tewer\n\n(4 New chat than 10-12 people from the entire IIT system—is already in the top 1% of professional\n\n@ Mystuff categories globally.\n\nGems > 1. The Global \"Tier\" of Work Experience\n\nTo understand who the competition is, we can categorize the typical applicant pool by the\nChats \"Selectivity Signal\" of their employer:\nTop Computer Science Universities Gl...\n. Tier Category Examples Your Standing\nAutomated Research Synthesis Tool...\nAl Opportunities in Dark Data Diamond Pre-Filtered Flipkart APM, You are here.\nLeadership Google/Meta APM,\nAl for Shadow Documentation McKinsey/BCG/Bain\n(MBB).\nProduct Management's Intrinsic Diffi...\nProduct Management's Toughest Cha... Gold High-Growth Tech Senior Engineers/PMs Competitive.\nfrom Uber, Stripe,\non this the \"12th\" day of \"March\" - pl... Airbnb, Zomato.\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 ; ces Gs | a : 6),6.8).0) 7°"
+      }
+    },
+    {
+      "Visual": {
+        "id": 9,
+        "timestamp": {
+          "secs_since_epoch": 1774956248,
+          "nanos_since_epoch": 710935000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana_ | > Google Gemini ) > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\n(4 Newchat\nTier Category Examples Your Standing\n& Mystuff\nDiamond Pre-Filtered Flipkart APM, You are here.\nGems > Leadership Google/Meta APM,\nMcKinsey/BCG/Bain\n(MBB).\nChats\nTop Computer Science Universities Gl... Gold High-Growth Tech Senior Engineers/PMs Competitive.\nfrom Uber, Stripe,\nAutomated Research Synthesis Tool... Airbnb, Zomato.\nAl Opportunities in Dark Data : .\nPP Silver Blue-Chip Corporate Standard roles at You are ahead of\nAl for Shadow Documentation Microsoft, Amazon,\nGoldman Sachs, P&G.\nProduct Management's Intrinsic Diffi...\nBronze Service/Generalist Large-scale IT You are significan\nProduct Management's Toughest Cha... services, smaller ahead.\nregional firms.\non this the \"12th\" day of \"March\" - pl...\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes."
+      }
+    },
+    {
+      "Visual": {
+        "id": 10,
+        "timestamp": {
+          "secs_since_epoch": 1774956254,
+          "nanos_since_epoch": 391164000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(Z Newchat . :\n2. Who exactly is \"better\" than a Flipkart APM?\n@ Mystuff In the eyes of a Harvard or Stanford admissions officer, there are very few profiles that sit\n\"above\" yours. The only candidates who might be viewed as more competitive are:\nGems >\n¢ Silicon Valley \"First-Movers\": An early engineer or PM at a company like OpenAl or\nChats Anthropic during a hyper-growth phase.\nTp Canter Sones Uhikctinacl e VC-Backed Founders: Someone who raised $5M+ for a startup and scaled it to millions\nof users.\nAutomated Research Synthesis Tool... .\ne Mega-Fund PE/Hedge Funds: Candidates from Blackstone or Jane Street (though these\nAl Opportunities in Dark Data usually don't apply for MS/MBA, just pure MBA).\naller chisel Points sion Estimated Percentage: Out of the thousands of Indian applicants, fewer than 1% to 2% will\nProduct Management's Intrinsic Diffi... have a professional pedigree that is objectively \"better\" than a Flipkart APM combined with a\nBCG internship.\nProduct Management's Toughest Cha...\non this the \"12th\" day of \"March\" - pl... 3. Why Work Experience \"Validates\" your Academics\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\ny (ted 3 (=) r e 2\n4 31 N Oo » z"
+      }
+    },
+    {
+      "Visual": {
+        "id": 11,
+        "timestamp": {
+          "secs_since_epoch": 1774956262,
+          "nanos_since_epoch": 531561000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nBCG internship.\n(Z Newchat\n& Mystuft 3. Why Work Experience \"Validates\" your Academics\nWhen the weighting of work experience increases to 50%, it doesn't mean your Department\nGems > Rank 1 or citations become less important. It means they become the evidence that your\nprofessional success wasn't a fluke.\nChats\nAdmissions committees look for “The Halo Effect.” If a candidate was Rank 1 at IIT Kanpur, won\nTop Computer Science Universities Gl... a National Hackathon, and then got into the most selective APM program in the country, it\nAutomated Research Synthesis Tool... creates a narrative of Unstoppable Excellence.\nAl Opportunities in Dark Data 4. What Type of Experience do Elite Schools Prefer?\nAl for Shadow Documentation Beyond the brand name of the company, schools look for three specific markers in work\nProduct Management's Intrinsic Diff... sod euliclileice\n¢ Scale and Complexity: They prefer a PM at Flipkart who manages a search engine for\nProduct Management's Toughest Cha... _\n100 million users over a PM at a small startup who manages 10,000 users. Your role at\non this the \"12th\" day of \"March\" - pl... Flipkart provides this \"Scale\" automatically.\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\ny (td 3 (=) r e 2\n4 31 N Oo » z"
+      }
+    },
+    {
+      "Visual": {
+        "id": 12,
+        "timestamp": {
+          "secs_since_epoch": 1774956270,
+          "nanos_since_epoch": 857495000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini ; > (124) YouTube\nSN ERIN\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\n[4 Newchat 4. What Type of Experience do Elite Schools Prefer?\n& Mystuft Beyond the brand name of the company, schools look for three specific markers in work\ny stu ;\nexperience:\nGems > ¢ Scale and Complexity: They prefer a PM at Flipkart who manages a search engine for\n100 million users over a PM at a small startup who manages 10,000 users. Your role at\nChats Flipkart provides this \"Scale\" automatically.\nTop Computer Science Universities Gl... ¢ Technical Leadership: For a joint MS/MBA, they prefer someone who can sit between the\n. business and the code. Since you are not aiming for a CTO role, your goal at Flipkart\nAutomated Research Synthesis Tool ... ; . . .\nshould be to lead \"Technical Products\" (e.g., pricing algorithms, supply chain\nAl Opportunities in Dark Data automation, or LLM integration).\nAl for Shadow Documentation ¢ Speed of Progression: Schools prefer someone who is promoted \"early\" or given\nen \"stretch\" assignments. Being in a rotational program is an advantage because it proves\nProduct Management's Intrinsic Diffi... .\nthe company views you as a future leader.\nProduct Management's Toughest Cha...\n. The “Uni \"Fact\non this the \"12th\" day of \"March\" - pl... 5 LJ Mela Cs\nVV] ee eae | Pee Fey Se) el HO eT al EO eT a | een MESO S-pegnen\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n: 31 N o @ L BA"
+      }
+    },
+    {
+      "Visual": {
+        "id": 13,
+        "timestamp": {
+          "secs_since_epoch": 1774956281,
+          "nanos_since_epoch": 503016000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nautomation, or LLM Integration).\n4 Newchat . . .\nis Moura: ¢ Speed of Progression: Schools prefer someone who is promoted \"early\" or given\n& Mystuff \"stretch\" assignments. Being in a rotational program is an advantage because it proves\nthe company views you as a future leader.\nGems >\n5. The \"Unicorn\" Factor\n\nChats What makes you an outlier isn't just the Flipkart brand; it is the combination.\n\nTop Computer Science Universities Gl... ¢ Most MBB consultants don't have 25+ research citations.\n\nAutomated Research Synthesis Tool... ¢ Most pure CS engineers don't have the \"Product\" sense of an APM.\n\nAl Opportunities in Dark Data ¢ Most PMs aren't Rank 1 in a physical science like Chemistry.\n\nAl for Shadow Documentation The fear that others will have \"better\" work experience ignores the fact that very few of them\n\nProduct Management's Intrinsic Diff. will have your academic \"spike.\" By waiting 2 years, you aren't becoming \"one of many\"; you\n\nare becoming a candidate who has checked every single box: Prestige, Rigor, Research, and\nProduct Management's Toughest Cha... Scale.\nthis the \"12th\" f “March” - pl... . . .\nonus ne day of \"March\" - p The Strategy: Focus on making your Flipkart tenure “outcome-heavy.\" If you lead a project\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n§ 31 ® @0Ob0e660, 07"
+      }
+    },
+    {
+      "Visual": {
+        "id": 14,
+        "timestamp": {
+          "secs_since_epoch": 1774956287,
+          "nanos_since_epoch": 232647000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nA\ney Mounehet 5. The \"Unicorn\" Factor\n& My stuff What makes you an outlier isn't just the Flipkart brand; it is the combination.\n@ 5 ¢ Most MBB consultants don't have 25+ research citations.\nems\n¢ Most pure CS engineers don't have the \"Product\" sense of an APM.\nOns ¢ Most PMs aren't Rank 1 in a physical science like Chemistry.\nTop Computer Science Universities Gl... . . .\nP p The fear that others will have \"better\" work experience ignores the fact that very few of them\nAutomated Research Synthesis Tool... will have your academic \"spike.\" By waiting 2 years, you aren't becoming \"one of many\"; you\nes are becoming a candidate who has checked every single box: Prestige, Rigor, Research, and\nAl Opportunities in Dark Data\nScale.\nAl for Shadow Documentation\nThe Strategy: Focus on making your Flipkart tenure “outcome-heavy.\" If you lead a project\nKole Le aE tof Teal IaiS a Ees IBD then that uses Al to solve a $10M problem, you will be in the top 0.5% of applicants worldwide,\nProduct Management's Toughest Cha... regardless of who else is in the pool.\non this the \"12th\" day of \"March\" - pl...\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 © - @Oo@s Siwy”"
+      }
+    },
+    {
+      "Visual": {
+        "id": 15,
+        "timestamp": {
+          "secs_since_epoch": 1774956292,
+          "nanos_since_epoch": 960619000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\nShow thinking v\n(4 Newchat +\n& Mystuff ty . .\nTo get the most accurate validation of your trajectory, you need to move beyond general advice\ne 5 and speak with individuals who have already navigated the \"Dual Gate” of elite technical and\nems\nbusiness programs.\n\nOns Here is a structured plan to find the right people and the exact framework for those\n\nTop Computer Science Universities Gl... conversations.\n\nAutomated Research Synthesis Tool ... 1. Identify Your “Council of Five”\n\nAl Opportunities in Dark Data You should aim to speak with at least one person from each of these categories to get a 360-\n\nAl for Shadow Documentation degree view of your profile.\n\nen ¢ Group A: The Program Insiders: Current students or recent alums of the Harvard\nProduct Management's Intrinsic Diffi... . . ; ;\nMS/MBA (Engineering Sciences) or Stanford Joint MSCS/MBA. They can tell you\n\nProduct Management's Toughest Cha... exactly how the admissions committee reacted to non-CS majors.\n\non this the \"12th\" day of \"March\" - pl... ¢ Group B: The IITK Global Alums: IIT Kanpur seniors who graduated 5-8 years ago, did a\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 ei ; ces if | A : | 5 roy"
+      }
+    },
+    {
+      "Visual": {
+        "id": 16,
+        "timestamp": {
+          "secs_since_epoch": 1774956298,
+          "nanos_since_epoch": 914020000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nexactly how the admissions committee reacted to non-CS majors.\n(Z Newchat . 8\n¢ Group B: The IITK Global Alums: IIT Kanpur seniors who graduated 5-8 years ago, did a\n@ My stuff Chemistry/Physics degree, transitioned to a Top 10 MS/MBA, and are now Founders or Al\nPMs in the US.\nGems > . .\n¢ Group C: The \"Super-Mentors” at Flipkart: Look for senior Product Leaders at Flipkart\nChats who have an MBA from HBS/Stanford/Wharton. They are your best resource for\nunderstanding how to turn your upcoming 2 years into a \"winning narrative.\"\nTop Computer Science Universities Gl... . . . . .\n¢ Group D: Specialist Admissions Consultants: Look for firms that specifically specialize\nAutomated Research Synthesis Tool... in \"Deferred MBA\" or \"Joint Degree\" applications for Indian candidates. Many offer a free\nAl Opeantunititos ie Dene Data 15-minute profile evaluation.\nAegan B _ ¢ Group E: Your Current Research Co-authors: Since you have 25+ citations, these\n‘or Shadow Documentation\nprofessors are already your champions. Ask them specifically about the \"Research\nProduct Management's Intrinsic Diff... Reputation\" of the labs you are targeting at Harvard and Stanford.\nProduct Management's Toughest Cha...\non this the \"12th\" day of \"March\" - pl... 2. How to Find Them (The Search Strategy)\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\ny (td 3 (=) r e 2\n4 31 N Oo » z"
+      }
+    },
+    {
+      "Visual": {
+        "id": 17,
+        "timestamp": {
+          "secs_since_epoch": 1774956304,
+          "nanos_since_epoch": 736155000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee Flipkart APM v < > @ =) gemini.google.com @ (0) 1) éo3 th +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n4 Newchat . ,\nG ew ena 3. The \"Pitch\" (How to Frame Your Profile)\n& My stuff When you reach out, do not lead with \"| am a Chemistry student.\" Lead with your \"Spikes.\" Use\nthis 3-sentence structure for your cold message:\nGems >\n“lam a Senior at IIT Kanpur (Dept Rank 1) with a CS Minor in ML and 25+ research\nChats citations. I’ve just been selected for the Flipkart APM program and | am targeting\n. - the [Program Name] in 2-3 years to build toward an Al Founder role. I’d love to ask\nTop Computer Science Universities Gl...\ntwo specific questions about how you navigated the technical transition from a non-\nAutomated Research Synthesis Tool... CS undergrad to [University Name].\"\nAl Opportunities in Dark Data\nAl for Shadow Documentation 4. What to Ask (The Information Interview)\n2 9 mari on \" tat i °\nProduct Management's Intrinsic Diff. Avoid asking \"Will | get in?\" (nobody knows for sure). Instead, ask \"How-to\" questions:\n¢ On Academics: \"Given my Rank 1in Chemistry but a few early C-grades in foundational\nProduct Management's Toughest Cha... . . . .\nMath, how much weight did the committee place on GRE/GMAT scores to verify\non this the \"12th\" day of \"March\" - pl... quantitative ability?\"\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 © - @Oo@s Siwy”"
+      }
+    },
+    {
+      "Visual": {
+        "id": 18,
+        "timestamp": {
+          "secs_since_epoch": 1774956310,
+          "nanos_since_epoch": 603902000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\n(4 Newchat 4. What to Ask (The Information Interview)\n& Mystuff Avoid asking \"Will | get in?\" (nobody knows for sure). Instead, ask \"How-to\" questions:\n¢ On Academics: \"Given my Rank 1in Chemistry but a few early C-grades in foundational\nGems > Math, how much weight did the committee place on GRE/GMAT scores to verify\nquantitative ability?\"\nChats . . . . . . . oe\ne Onthe CS Minor: \"Did the admissions committee view the CS Minor as ‘sufficient’ for the\nTop Computer Science Universities Gl... MS portion, or did they suggest taking additional post-baccalaureate courses?\"\nAutomated Research Synthesis Tool ... ¢ On Flipkart: \"As an APM, what specific type of ‘impact story’ (User Growth vs. Technical\noo, Architecture) carries the most weight for the MS/MBA committee?\"\nAl Opportunities in Dark Data\n¢ On the Founder Goal: \"For someone wanting to be a Founder rather than a CTO, did the\nAl f h D tati . : : , , 9\nor Shadow Documentation joint degree provide the right balance, or did you find one side of the degree more\nProduct Management's Intrinsic Diffi... valuable?\"\nProduct Management's Toughest Cha...\non this the \"12th\" day of \"March\" - pl 5. How to Structure Your Documentation\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n. CGS 66¢@\\/QO7-\n4 31 N Oo » z"
+      }
+    },
+    {
+      "Visual": {
+        "id": 19,
+        "timestamp": {
+          "secs_since_epoch": 1774956318,
+          "nanos_since_epoch": 535464000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana_ | > Google Gemini ) > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n[4 Newchat 6. The \"LinkedIn Voice Note\" Hack\naS « For the Group C (Flipkart) and Group A (Harvard/Stanford) contacts, send a 30-second voice\nMy stu . . . : : :\nnote on Linkedin instead of a text message. Mention you are an incoming APM at Flipkart and\nGems 5 an IITK Rank 1. The \"prestige\" of these two brands together usually guarantees a response rate\nof over 50%.\nChats Would you like me to help you draft the specific \"Networking Tracker\" in a spreadsheet\nTop Computer Science Universities Gl... format so you can stay organized during your first few months at Flipkart?\nAutomated Research Synthesis Tool...\nAl Opportunities in Dark Data\nAl for Shadow Documentation yes please\nProduct Management's Intrinsic Diffi...\nProduct Management's Toughest Cha... +> Show thinking v\non this the \"12th\" day of \"March\" - pl...\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\nEe il"
+      }
+    },
+    {
+      "Visual": {
+        "id": 20,
+        "timestamp": {
+          "secs_since_epoch": 1774956324,
+          "nanos_since_epoch": 321372000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee Flipkart APM v < > @ =) gemini.google.com @ (0) 1) éo3 th +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(Z New chat f8 Export to Sheets 0\n& Mystuff\nGems > .\nOutreach Workflow: The Networking Funnel\nChats To reach your goal of being a Founder or Tech Al PM, your networking should follow a specific\nprogression: from broad information gathering to specific \"referral\" or \"endorsement\" support.\nTop Computer Science Universities Gl...\nAutomated Research Synthesis Tool... Category-Specific Question Bank\nAl Opportunities in Dark Data When you secure these meetings, do not ask general questions. Use these targeted prompts to\nget the \"insider\" knowledge you need for the joint degree application.\nAl for Shadow Documentation\nProduct Management's Intrinsic Diff... 1. For Harvard/Stanford Joint Alums\ne \"As anon-CS undergraduate, how did you frame your ‘technical readiness’ for the MS\nProduct Management's Toughest Cha... . .\nportion without a CS degree?\"\nthis the \"12th\" d f “March” - pl... . oe . Be 5 .\nonenisane SOT ETN SP ¢ \"Did the admissions committee ask about your specific foundational math grades, or did\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 ; ces Gs | a : 660).0 7)"
+      }
+    },
+    {
+      "Visual": {
+        "id": 21,
+        "timestamp": {
+          "secs_since_epoch": 1774956332,
+          "nanos_since_epoch": 950286000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee Flipkart APM v < > @ =) gemini.google.com @ (0) 1) éo3 th +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\nEXECUTION UNECKIIST Tor tne Next © Montns\n(4 New chat e [] Month 1: Set up your Linkedin filters and identify 10 people in each \"Council\" category.\n& My stuff ¢ [] Month 2: Send 5 outreach messages per week. Aim for at least 2 \"Coffee Chats\" per\nmonth.\nGems > . . .\n¢ [] Month 3: Take your \"Diagnostic GMAT\" after 2 weeks of prep; use your network to find\nChats a study partner who is also an IITian/APM.\ne [] Month 4: Document every conversation in the tracker. Note which \"stories\" from your\nTop Computer Science Universities Gl... . : . .\nChemistry research or BCG internship resonated most with the alums.\nAut ted R h thesis Tool ... . .\nutomated Research Synthesis Too e [] Month 5: Update your Research Mentors on your Flipkart start date and finalize any\nAl Opportunities in Dark Data pending paper submissions to keep the citation count growing.\nAl for Shadow Documentation Would you like me to help you refine the \"Founder Narrative\" specifically for your Mrittika Al\nPradlen Menegomentelndincie BG. startup so you can explain it clearly during these networking calls?\nProduct Management's Toughest Cha... oopeoi:\non this the \"12th\" day of \"March\" - pl...\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n+ 25 Tools Thinking v &\n© Settings and help e\nGemini is Al and can make mistakes.\na 31 ® :}@oes | he"
+      }
+    },
+    {
+      "Visual": {
+        "id": 22,
+        "timestamp": {
+          "secs_since_epoch": 1774956347,
+          "nanos_since_epoch": 754882000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana > Google Gemini > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\n(4 Newchat\ncan you give me a docx to download and a excel file to\n& My stuff download which has all these information?\nGems >\n+\n\nChats\n\nAutomated Research Synthesis Tool...\n\nAl Opportunities in Dark Data\n\nAl for Shadow Documentation\n\nProduct Management's Intrinsic Diffi...\n\nProduct Management's Toughest Cha...\n\non this the \"12th\" day of \"March\" - pl...\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\nee"
+      }
+    },
+    {
+      "Visual": {
+        "id": 23,
+        "timestamp": {
+          "secs_since_epoch": 1774956352,
+          "nanos_since_epoch": 869111000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana > Google Gemini > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(Z Newchat\ncan you give me a docx to download and a excel file to\nMy stuff download which has all these information?\nGems >\n+ Defining Data Output v Answer now\n\nChats\n\nTop Computer Science Universities Gl...\n\nAutomated Research Synthesis Tool...\n\nAl Opportunities in Dark Data\n\nAl for Shadow Documentation\n\nProduct Management's Intrinsic Diffi...\n\nProduct Management's Toughest Cha...\n\non this the \"12th\" day of \"March\" - pl...\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\n$e -"
+      }
+    },
+    {
+      "Visual": {
+        "id": 24,
+        "timestamp": {
+          "secs_since_epoch": 1774956357,
+          "nanos_since_epoch": 942503000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana > Google Gemini > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings ec 3 @®\n(4 Newchat\ncan you give me a docx to download and a excel file to\n& My stuff download which has all these information?\nGems >\n~\n+ v Answer now\n\nChats\n\nAutomated Research Synthesis Tool...\n\nAl Opportunities in Dark Data\n\nAl for Shadow Documentation\n\nProduct Management's Intrinsic Diffi...\n\nProduct Management's Toughest Cha...\n\non this the \"12th\" day of \"March\" - pl...\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\nee"
+      }
+    },
+    {
+      "Visual": {
+        "id": 25,
+        "timestamp": {
+          "secs_since_epoch": 1774956363,
+          "nanos_since_epoch": 68467000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee Flipkart APM v < > @ =) gemini.google.com @ (0) 1) éo3 th +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana > Google Gemini > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(Z Newchat\ncan you give me a docx to download and a excel file to\nMy stuff download which has all these information?\nGems >\n9) Refining File Structure v Answer now\n\nChats\n\nTop Computer Science Universities Gl...\n\nAutomated Research Synthesis Tool...\n\nAl Opportunities in Dark Data\n\nAl for Shadow Documentation\n\nProduct Management's Intrinsic Diffi...\n\nProduct Management's Toughest Cha...\n\non this the \"12th\" day of “March” - pl...\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\n$e -"
+      }
+    },
+    {
+      "Visual": {
+        "id": 26,
+        "timestamp": {
+          "secs_since_epoch": 1774956371,
+          "nanos_since_epoch": 411030000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana @ > Google Gemini > > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(Z Newchat\ncan you give me a docx to download and a excel file to\n& My stuff download which has all these information?\nGems >\n% Show thinking v\nChats\nTop Computer Science Universities Gl... . . . . .\nP P While | cannot provide direct download links for .docx or .x1sx files, | have prepared the full\nAutomated Research Synthesis Tool... content for both below. You can copy the first section into a Word document and the second\neo. section into an Excel or Google Sheets spreadsheet to have your complete strategy organized.\n\nAl Opportunities in Dark Data\n\nAl for Shadow Documentation File 1: Master Career Roadmap & Application Strategy (Word Document Content)\n\nProduct Management's Intrinsic Diff... CANDIDATE PROFILE: STRATEGIC OVERVIEW\n\nProduct Management's Toughest Cha... ¢ Academic Foundation: BS Chemistry, IIT Kanpur (Department Rank 1).\n\non this the \"12th\" day of \"March\" - pl... ¢ Technical Spike: CS Minor (ML & Computer Systems), 25+ Research Citations in\n\nmake a indian form with the district a...\n\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\n4 31 © - @Oo@s Siwy”"
+      }
+    },
+    {
+      "Visual": {
+        "id": 27,
+        "timestamp": {
+          "secs_since_epoch": 1774956377,
+          "nanos_since_epoch": 338420000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee WY Flipkart APM v <|> @ 2 gemini.google.com @ © VY & ao +\n(7) APM Season | 20... @@ Sign in - McKinse... (Apply to the Your... %§ OpenClaw Archite... {¥) Office Hours with... Suneet Maharana (@ > Google Gemini » > (124) YouTube\n= Q Gemini Top Computer Science Universities Global Rankings Pon @®\n(4 Newchat ADMISSION PROBABILITY MATRIX\n| Program | Probability (Current) | Probability (Post-Flipkart) |\n& Mystuff\nGems 5 | Harvard MS/MBA (Engineering Sciences) | 75% | 95% |\n| Stanford Joint MSCS/MBA | 30% | 55% |\nChats | Harvard MS in Comp. Science & Eng (CSE) | 80% | 98% |\n| CMU MS in Al & Innovation (MSAII) | 60% | 85% |\nTop Computer Science Universities Gl... | UPenn (Wharton) Moelis Access | 70% | 90% |\nAutomated Research Synthesis Tool...\n3-YEAR STRATEGIC EXECUTION PLAN\nAl Opportunities in Dark Data\n; Phase 1: Immediate Academic Hardening (Now - July 2026)\nAl for Shadow Documentation\n¢ Standardized Testing: Secure a 170/170 Quant on the GRE/GMAT. This is mandatory to\nProduct M t's Intrinsic Diffi... : :\nDLE L ILI offset early math grades (MTH111/113) and prove mathematical maturity.\nProduct Mehagement's Toughest Cha e Research Continuity: Finalize any pending papers with Prof. Pal. Aim to hit 35-40\non this the \"12th\" day of \"March\" - pl... citations before joining Flipkart.\nmake a indian form with the district a...\nAsk Gemini 3\nmba.com DOB Format and Changes\n4 22 Tpealls Thinking v BS\n© Settings and help e\nGemini is Al and can make mistakes.\na if —\nA 31 N oO -~ @ SS) 7"
+      }
+    },
+    {
+      "Visual": {
+        "id": 28,
+        "timestamp": {
+          "secs_since_epoch": 1774956384,
+          "nanos_since_epoch": 660447000
+        },
+        "app_name": "unknown.app",
+        "window_title": "Unknown Window",
+        "event_type": "Scroll",
+        "width": 2880,
+        "height": 1800,
+        "ocr_text": "eee He omega Upgrade to Pro (=) @B <>\n® Qaqep Bey {} capture-session-1774954337,json UX > %2 (J -: — ystem blueprint phase prioritizati + © --\nlogs > {} capture-session-1774954337,json > ... Review Next File Noicee! But now i think we should add\n> .qodo — the OCR to see what it extracts from\n> logs 1 { each accepted screeshots so that we\n> src e \"session_summary\": { its i S\n> target \"session_start_epoch_secs\": 1774954120, cargo run\n_ \"session_end_epoch_secs\": 1774954337,\n= Cargo.lock M \"session_duration_secs\": 216, .\n© Cargo.toml M \"total_events_seen\": 91, Do activity on screen, then Ctrl+C.\n¥ High level Blueprint 3331fd... \"accepted_captures\": 21, Open latest filein logs/ and inspect pay\n\"“dropped_by_phash\": 70, loads [].Visual.ocr_text .\n\"per_event_counts\": {\n\"KeyPress\": 6, One important note\nvecattte a 3 This uses the tesseract CLI at runtime.\n} cro If OCR text shows error markers, install it:\n,\n\"saved_payload_count\": 21 brew install tesseract\n},\n\"payloads\": [\n{ If you want, | can next add:\n\"Visual\": { ° confidence/quality heuristics (ignore\n\"id\": 1, tiny/garbled OCR),\n\"timestamp\": { 4 ti hashing f ,\n\"secs_since_epoch\": 1774954125, Se OO DOOR SUP SIONS\n“nanos_since_epoch\": 519424000 OCR output,\nProblems Output DebugConsole Terminal Ports J sensorlayer AV +r ({) MW -- ~ x * and a side-by-side debug file with\n—_ . . — . timestamp + event type + first 200\nQ Gemini Top Computer Science Universities Global Rankings Pon @®\\n(4 Newchat ADMISSION PROBABILITY MATRIX\\n| Program | Probab . .\nility (Current) | Probability (Post-Flipkart) |\\n& Mystuff\\nGems 5 | Harvard MS/MBA (Engineering Sciences) | 75% | 95% |\\n| Sta chars of OCR for quick scanning.\nnford Joint MSCS/MBA | 30% | 55% |\\nChats | Harvard MS in Comp. Science & Eng (CSE) | 80% | 98% |\\n| CMU MS in Al & Innovation\n(MSAII) | 60% | 85% |\\nTop Computer Science Universities Gl... | UPenn (Wharton) Moelis Access | 70% | 90% |\\nAutomated Researc coo\nh Synthesis Tool...\\n3-YEAR STRATEGIC EXECUTION PLAN\\nAl Opportunities in Dark Data\\n; Phase 1: Immediate Academic Hardening (N\now — July 2026)\\nAl for Shadow Documentation\\n¢ Standardized Testing: Secure a 170/170 Quant on the GRE/GMAT. This is mandatory\nto\\nProduct M t's Intrinsic Diffi... : :\\nDLE L ILI offset early math grades (MTH111/113) and prove mathematical maturity. \\nPr\noduct Mehagement's Toughest Cha e Research Continuity: Finalize any pending papers with Prof. Pal. Aim to hit 35-4@\\non this th\ne \\\"12th\\\" day of \\\"March\\\" - pl... citations before joining Flipkart.\\nmake a indian form with the district a...\\nAsk Gemini 3\n\\nmba.com DOB Format and Changes\\n4 22 Tpealls Thinking v BS\\n© Settings and help e\\nGemini is Al and can make mistakes.\\na if .\nhn > 2Files UndoAll Keep All | Review |\n-\\nA 31 N 00 ~ @ SS) 7\n}\n; }\nI cov Auto v Gal ru)\n#K to generate command\nxXx VUmaint C omega MO0AD Cursor Tab Ln1,Col1 Spaces:2 UTF-8 LF {} JSON @ GoLive _ Qodo Qa\n= ' 1 = = . be\nq 31 OG yWws Siwy”\nee -"
+      }
+    }
+  ]
+}
