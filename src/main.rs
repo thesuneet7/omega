@@ -1,5 +1,7 @@
 mod models;
 mod phase2;
+mod phase3;
+mod phase4;
 mod phash;
 mod sensor;
 
@@ -83,6 +85,18 @@ fn main() {
         Some("phase2") => {
             if let Err(err) = run_phase2_from_args(args.collect()) {
                 eprintln!("Phase 2 ingestion failed: {err:#}");
+                std::process::exit(1);
+            }
+        }
+        Some("phase3") => {
+            if let Err(err) = run_phase3_from_args(args.collect()) {
+                eprintln!("Phase 3 stitching failed: {err:#}");
+                std::process::exit(1);
+            }
+        }
+        Some("phase4") => {
+            if let Err(err) = run_phase4_from_args(args.collect()) {
+                eprintln!("Phase 4 summarization failed: {err:#}");
                 std::process::exit(1);
             }
         }
@@ -233,8 +247,86 @@ fn run_phase2_from_args(args: Vec<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn run_phase4_from_args(args: Vec<String>) -> anyhow::Result<()> {
+    let mut output_path: Option<PathBuf> = None;
+    let mut db_path: Option<PathBuf> = None;
+    let mut force = false;
+    let mut dry_run = false;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--output" => {
+                idx += 1;
+                let Some(value) = args.get(idx) else {
+                    anyhow::bail!("missing value for --output");
+                };
+                output_path = Some(PathBuf::from(value));
+            }
+            "--db" => {
+                idx += 1;
+                let Some(value) = args.get(idx) else {
+                    anyhow::bail!("missing value for --db");
+                };
+                db_path = Some(PathBuf::from(value));
+            }
+            "--force" => {
+                force = true;
+            }
+            "--dry-run" => {
+                dry_run = true;
+            }
+            "--help" | "-h" => {
+                print_usage();
+                return Ok(());
+            }
+            unknown => anyhow::bail!("unknown phase4 argument '{unknown}'"),
+        }
+        idx += 1;
+    }
+
+    let config = phase4::SummarizeConfig::from_env_and_args(db_path, output_path, force, dry_run)?;
+    let output_file = phase4::run_summarization(config)?;
+    println!("Phase 4 summarization completed: {}", output_file.display());
+    Ok(())
+}
+
+fn run_phase3_from_args(args: Vec<String>) -> anyhow::Result<()> {
+    let mut output_path: Option<PathBuf> = None;
+    let mut db_path: Option<PathBuf> = None;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--output" => {
+                idx += 1;
+                let Some(value) = args.get(idx) else {
+                    anyhow::bail!("missing value for --output");
+                };
+                output_path = Some(PathBuf::from(value));
+            }
+            "--db" => {
+                idx += 1;
+                let Some(value) = args.get(idx) else {
+                    anyhow::bail!("missing value for --db");
+                };
+                db_path = Some(PathBuf::from(value));
+            }
+            "--help" | "-h" => {
+                print_usage();
+                return Ok(());
+            }
+            unknown => anyhow::bail!("unknown phase3 argument '{unknown}'"),
+        }
+        idx += 1;
+    }
+
+    let config = phase3::StitchConfig::from_env_and_args(db_path, output_path)?;
+    let output_file = phase3::run_stitching(config)?;
+    println!("Phase 3 stitching completed: {}", output_file.display());
+    Ok(())
+}
+
 fn print_usage() {
     eprintln!(
-        "Usage:\n  cargo run -- capture\n  cargo run -- phase2 [--input <path>] [--output <path>]\n\nDefaults:\n  - capture is the default when no command is provided\n  - phase2 uses the latest logs/capture-session-*.json if --input is omitted\n\nEnvironment (phase2):\n  OMEGA_EMBEDDING_BACKEND=gemini|openai|hash (default: gemini)\n  OMEGA_EMBED_MODEL=text-embedding-004\n  OMEGA_PHASE2_DB_PATH=logs/phase2.db\n  OMEGA_CHUNK_SIZE_CHARS=1200\n  OMEGA_CHUNK_OVERLAP_CHARS=200\n  OMEGA_REDACT_PII=true\n  OMEGA_EMBED_MAX_RETRIES=3\n  OMEGA_EMBED_RETRY_BASE_DELAY_MS=500\n\nGemini config:\n  OMEGA_GEMINI_API_KEY=... (required when backend=gemini)\n  OMEGA_GEMINI_BASE_URL=https://generativelanguage.googleapis.com\n\nOpenAI-compatible config:\n  OMEGA_OPENAI_API_KEY=... (required when backend=openai)\n  OMEGA_OPENAI_BASE_URL=https://api.openai.com"
+        "Usage:\n  cargo run -- capture\n  cargo run -- phase2 [--input <path>] [--output <path>]\n  cargo run -- phase3 [--db <path>] [--output <path>]\n  cargo run -- phase4 [--db <path>] [--output <path>] [--force] [--dry-run]\n\nDefaults:\n  - capture is the default when no command is provided\n  - phase2 uses the latest logs/capture-session-*.json if --input is omitted\n  - phase3 uses logs/phase2.db when --db is omitted\n  - phase4 uses logs/phase2.db when --db is omitted\n\nEnvironment (phase2):\n  OMEGA_EMBEDDING_BACKEND=gemini|openai|hash (default: gemini)\n  OMEGA_EMBED_MODEL=gemini-embedding-001\n  OMEGA_PHASE2_DB_PATH=logs/phase2.db\n  OMEGA_CHUNK_SIZE_CHARS=1200\n  OMEGA_CHUNK_OVERLAP_CHARS=200\n  OMEGA_REDACT_PII=true\n  OMEGA_EMBED_MAX_RETRIES=3\n  OMEGA_EMBED_RETRY_BASE_DELAY_MS=500\n  OMEGA_PHASE2_CANONICAL_MODE=semantic|full (default: semantic)\n  OMEGA_PHASE2_OCR_CLEAN=true|false (default: true)\n  OMEGA_PHASE2_OCR_LINE_SCORE_RATIO=0.0-1.0 (default: 0.12)\n  OMEGA_PHASE2_OCR_EMPHASIS_TOP=true|false (default: true)\n\nEnvironment (phase3):\n  OMEGA_PHASE3_DB_PATH=logs/phase2.db\n  OMEGA_EMBEDDING_BACKEND=gemini|openai|hash (match Phase 2)\n  OMEGA_EMBED_MODEL=gemini-embedding-001 (match Phase 2)\n  OMEGA_PHASE3_MATCH_THRESHOLD=0.60\n  OMEGA_PHASE3_DECAY_LAMBDA=0.00002\n  OMEGA_PHASE3_ACTIVE_WINDOW_MINS=15\n\nEnvironment (phase4):\n  OMEGA_PHASE4_DB_PATH=logs/phase2.db\n  OMEGA_PHASE4_BACKEND=gemini|stub (default: gemini)\n  OMEGA_PHASE4_MODEL=gemini-2.5-flash-lite\n  OMEGA_PHASE4_MAX_INPUT_CHARS=48000\n  OMEGA_PHASE4_MAX_RETRIES=3\n  OMEGA_PHASE4_RETRY_BASE_DELAY_MS=800\n  OMEGA_PHASE4_FORCE=true (re-summarize all buckets)\n  OMEGA_PHASE4_DRY_RUN=true (no API calls)\n\nGemini config:\n  OMEGA_GEMINI_API_KEY=... (required when backend=gemini)\n  OMEGA_GEMINI_BASE_URL=https://generativelanguage.googleapis.com\n\nOpenAI-compatible config:\n  OMEGA_OPENAI_API_KEY=... (required when backend=openai)\n  OMEGA_OPENAI_BASE_URL=https://api.openai.com"
     );
 }

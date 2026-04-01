@@ -1,0 +1,448 @@
+{
+  "summary": {
+    "db_path": "logs/phase2.db",
+    "generated_at_epoch_secs": 1775054688,
+    "candidates_seen": 106,
+    "chunks_assigned": 0,
+    "chunks_skipped_existing_assignment": 106,
+    "existing_buckets_loaded": 72,
+    "buckets_created": 0,
+    "match_threshold": 0.6,
+    "decay_lambda": 0.00002,
+    "active_window_mins": 15
+  },
+  "buckets": [
+    {
+      "bucket_id": 72,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958282
+    },
+    {
+      "bucket_id": 71,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958282
+    },
+    {
+      "bucket_id": 70,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958255
+    },
+    {
+      "bucket_id": 69,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958255
+    },
+    {
+      "bucket_id": 68,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958245
+    },
+    {
+      "bucket_id": 67,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958245
+    },
+    {
+      "bucket_id": 66,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958230
+    },
+    {
+      "bucket_id": 65,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958230
+    },
+    {
+      "bucket_id": 64,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958221
+    },
+    {
+      "bucket_id": 63,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958221
+    },
+    {
+      "bucket_id": 62,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958209
+    },
+    {
+      "bucket_id": 61,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958209
+    },
+    {
+      "bucket_id": 60,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958202
+    },
+    {
+      "bucket_id": 59,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958202
+    },
+    {
+      "bucket_id": 58,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958194
+    },
+    {
+      "bucket_id": 57,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958194
+    },
+    {
+      "bucket_id": 56,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958190
+    },
+    {
+      "bucket_id": 55,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958190
+    },
+    {
+      "bucket_id": 54,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958185
+    },
+    {
+      "bucket_id": 53,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958185
+    },
+    {
+      "bucket_id": 52,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958179
+    },
+    {
+      "bucket_id": 51,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958179
+    },
+    {
+      "bucket_id": 50,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958174
+    },
+    {
+      "bucket_id": 49,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958174
+    },
+    {
+      "bucket_id": 48,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958169
+    },
+    {
+      "bucket_id": 47,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958169
+    },
+    {
+      "bucket_id": 46,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958164
+    },
+    {
+      "bucket_id": 45,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958164
+    },
+    {
+      "bucket_id": 44,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958159
+    },
+    {
+      "bucket_id": 43,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958159
+    },
+    {
+      "bucket_id": 42,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958154
+    },
+    {
+      "bucket_id": 41,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958154
+    },
+    {
+      "bucket_id": 40,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958148
+    },
+    {
+      "bucket_id": 39,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774958148
+    },
+    {
+      "bucket_id": 38,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957521
+    },
+    {
+      "bucket_id": 37,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957521
+    },
+    {
+      "bucket_id": 36,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957514
+    },
+    {
+      "bucket_id": 35,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957514
+    },
+    {
+      "bucket_id": 34,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957510
+    },
+    {
+      "bucket_id": 33,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957510
+    },
+    {
+      "bucket_id": 32,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957505
+    },
+    {
+      "bucket_id": 31,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957505
+    },
+    {
+      "bucket_id": 30,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957500
+    },
+    {
+      "bucket_id": 29,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957500
+    },
+    {
+      "bucket_id": 28,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957495
+    },
+    {
+      "bucket_id": 27,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957495
+    },
+    {
+      "bucket_id": 26,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957490
+    },
+    {
+      "bucket_id": 25,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957490
+    },
+    {
+      "bucket_id": 24,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957486
+    },
+    {
+      "bucket_id": 23,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957486
+    },
+    {
+      "bucket_id": 22,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957481
+    },
+    {
+      "bucket_id": 21,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957481
+    },
+    {
+      "bucket_id": 20,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957476
+    },
+    {
+      "bucket_id": 19,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957476
+    },
+    {
+      "bucket_id": 18,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957469
+    },
+    {
+      "bucket_id": 17,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957469
+    },
+    {
+      "bucket_id": 16,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957464
+    },
+    {
+      "bucket_id": 15,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957464
+    },
+    {
+      "bucket_id": 14,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957457
+    },
+    {
+      "bucket_id": 13,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957457
+    },
+    {
+      "bucket_id": 12,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957452
+    },
+    {
+      "bucket_id": 11,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957452
+    },
+    {
+      "bucket_id": 10,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957448
+    },
+    {
+      "bucket_id": 9,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957448
+    },
+    {
+      "bucket_id": 8,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957443
+    },
+    {
+      "bucket_id": 7,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957443
+    },
+    {
+      "bucket_id": 6,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957438
+    },
+    {
+      "bucket_id": 5,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957438
+    },
+    {
+      "bucket_id": 4,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957431
+    },
+    {
+      "bucket_id": 3,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957431
+    },
+    {
+      "bucket_id": 2,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957426
+    },
+    {
+      "bucket_id": 1,
+      "item_count": 1,
+      "created_at_epoch_secs": 1775049815,
+      "last_active_epoch_secs": 1774957426
+    }
+  ]
+}

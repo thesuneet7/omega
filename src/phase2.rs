@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -28,6 +29,11 @@ pub struct IngestionSummary {
     pub embedding_backend: String,
     pub embedding_model: String,
     pub pii_redaction_enabled: bool,
+    /// `semantic` (default): embed mostly cleaned OCR + coarse app context — best for Phase 3 clustering. `full`: legacy verbose canonical text.
+    pub canonical_mode: String,
+    pub ocr_clean_enabled: bool,
+    pub ocr_line_score_ratio: f32,
+    pub ocr_emphasize_top: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,6 +89,35 @@ impl EmbedTaskType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanonicalMode {
+    /// Best for semantic stitching: stable across scrolls/tabs (excludes volatile window title, timestamp from embedded text).
+    Semantic,
+    /// Original format with full metadata in the embedded string (more unique per capture).
+    Full,
+}
+
+impl CanonicalMode {
+    fn from_env() -> Result<Self> {
+        let raw =
+            std::env::var("OMEGA_PHASE2_CANONICAL_MODE").unwrap_or_else(|_| "semantic".to_string());
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "semantic" => Ok(Self::Semantic),
+            "full" => Ok(Self::Full),
+            other => Err(anyhow!(
+                "unsupported OMEGA_PHASE2_CANONICAL_MODE='{other}', expected 'semantic' or 'full'"
+            )),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Semantic => "semantic",
+            Self::Full => "full",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IngestionConfig {
     pub input_log: Option<PathBuf>,
@@ -99,6 +134,12 @@ pub struct IngestionConfig {
     pub redact_pii: bool,
     pub max_retries: usize,
     pub retry_base_delay_ms: u64,
+    pub canonical_mode: CanonicalMode,
+    pub ocr_clean_enabled: bool,
+    /// Keep lines whose content score is at least this fraction of the best line in the same capture (0.0–1.0).
+    pub ocr_line_score_ratio: f32,
+    /// Duplicate the top-scoring line(s) once at the end so embeddings emphasize real body text over stray UI lines.
+    pub ocr_emphasize_top: bool,
 }
 
 impl IngestionConfig {
@@ -113,8 +154,10 @@ impl IngestionConfig {
         let openai_base_url = std::env::var("OMEGA_OPENAI_BASE_URL")
             .unwrap_or_else(|_| "https://api.openai.com".to_string());
         let openai_api_key = std::env::var("OMEGA_OPENAI_API_KEY").ok();
-        let embed_model =
-            std::env::var("OMEGA_EMBED_MODEL").unwrap_or_else(|_| "text-embedding-004".to_string());
+        let embed_model = std::env::var("OMEGA_EMBED_MODEL").unwrap_or_else(|_| {
+            // Stable text embeddings API; prefer over legacy text-embedding-004 (deprecated path).
+            "gemini-embedding-001".to_string()
+        });
         let db_path = PathBuf::from(
             std::env::var("OMEGA_PHASE2_DB_PATH").unwrap_or_else(|_| "logs/phase2.db".to_string()),
         );
@@ -138,6 +181,20 @@ impl IngestionConfig {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(500);
+        let canonical_mode = CanonicalMode::from_env()?;
+        let ocr_clean_enabled = std::env::var("OMEGA_PHASE2_OCR_CLEAN")
+            .unwrap_or_else(|_| "true".to_string())
+            .to_ascii_lowercase()
+            != "false";
+        let ocr_line_score_ratio = std::env::var("OMEGA_PHASE2_OCR_LINE_SCORE_RATIO")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|&r| r >= 0.0 && r <= 1.0)
+            .unwrap_or(0.12);
+        let ocr_emphasize_top = std::env::var("OMEGA_PHASE2_OCR_EMPHASIS_TOP")
+            .unwrap_or_else(|_| "true".to_string())
+            .to_ascii_lowercase()
+            != "false";
 
         Ok(Self {
             input_log,
@@ -154,6 +211,10 @@ impl IngestionConfig {
             redact_pii,
             max_retries,
             retry_base_delay_ms,
+            canonical_mode,
+            ocr_clean_enabled,
+            ocr_line_score_ratio,
+            ocr_emphasize_top,
         })
     }
 }
@@ -357,7 +418,7 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
 
     for payload in &session.payloads {
         let Phase1Payload::Visual(visual) = payload;
-        let canonical_text = to_canonical_text(visual, config.redact_pii)?;
+        let canonical_text = to_canonical_text(visual, &config)?;
         let canonical_hash = sha256_hex(&canonical_text);
         persist_capture(&db, visual, &canonical_text, &canonical_hash)?;
 
@@ -433,6 +494,10 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
             embedding_backend: provider.backend_name().to_string(),
             embedding_model: provider.model_name().to_string(),
             pii_redaction_enabled: config.redact_pii,
+            canonical_mode: config.canonical_mode.as_str().to_string(),
+            ocr_clean_enabled: config.ocr_clean_enabled,
+            ocr_line_score_ratio: config.ocr_line_score_ratio,
+            ocr_emphasize_top: config.ocr_emphasize_top,
         },
         chunks: output_chunks,
     };
@@ -723,28 +788,246 @@ fn latest_capture_log_path(logs_dir: &Path) -> Result<PathBuf> {
     })
 }
 
-fn to_canonical_text(item: &VisualLogItem, redact_pii: bool) -> Result<String> {
-    let ts = item
-        .timestamp
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string());
+fn to_canonical_text(item: &VisualLogItem, config: &IngestionConfig) -> Result<String> {
     let ocr_raw = normalize_text(&item.ocr_text);
-    let ocr = if redact_pii {
+    let ocr_after_pii = if config.redact_pii {
         redact_sensitive_text(&ocr_raw)?
     } else {
         ocr_raw
     };
-    Ok(format!(
-        "timestamp={ts}\napp_name={}\nwindow_title={}\nevent_type={}\nocr_engine={}\nresolution={}x{}\nocr_text:\n{}",
-        normalize_text(&item.app_name),
-        normalize_text(&item.window_title),
-        normalize_text(&item.event_type),
-        normalize_text(&item.ocr_engine_used),
-        item.width,
-        item.height,
-        ocr
-    ))
+    let ocr = if config.ocr_clean_enabled {
+        clean_ocr_for_semantics(&ocr_after_pii, config)
+    } else {
+        ocr_after_pii
+    };
+
+    match config.canonical_mode {
+        CanonicalMode::Semantic => {
+            let app = normalize_text(&item.app_name);
+            if app.is_empty() && ocr.is_empty() {
+                Ok("content:\n".to_string())
+            } else if app.is_empty() {
+                Ok(format!("content:\n{ocr}"))
+            } else {
+                Ok(format!("app: {app}\ncontent:\n{ocr}"))
+            }
+        }
+        CanonicalMode::Full => {
+            let ts = item
+                .timestamp
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs().to_string())
+                .unwrap_or_else(|_| "0".to_string());
+            Ok(format!(
+                "timestamp={ts}\napp_name={}\nwindow_title={}\nevent_type={}\nocr_engine={}\nresolution={}x{}\nocr_text:\n{}",
+                normalize_text(&item.app_name),
+                normalize_text(&item.window_title),
+                normalize_text(&item.event_type),
+                normalize_text(&item.ocr_engine_used),
+                item.width,
+                item.height,
+                ocr
+            ))
+        }
+    }
+}
+
+/// App-agnostic OCR cleanup: score lines by length / wordiness / sentence shape, drop obvious
+/// chrome (URLs, paths), strip generic "long title — short app" tails, then keep lines within a
+/// relative score band so embeddings down-rank UI noise without hardcoding specific apps.
+fn clean_ocr_for_semantics(input: &str, config: &IngestionConfig) -> String {
+    fn url_regex() -> &'static Regex {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        RE.get_or_init(|| {
+            Regex::new(r"(?i)https?://[^\s]+|www\.[^\s]+").expect("url regex")
+        })
+    }
+    fn host_only_line() -> &'static Regex {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        RE.get_or_init(|| {
+            Regex::new(r"(?i)^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(/\S*)?$").expect("host line regex")
+        })
+    }
+    fn path_only_line() -> &'static Regex {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        RE.get_or_init(|| Regex::new(r"^/[A-Za-z0-9._~/-]+$").expect("path-only regex"))
+    }
+
+    let without_urls = url_regex().replace_all(input, " ");
+    let collapsed = without_urls
+        .chars()
+        .map(|c| if c.is_control() && c != '\n' { ' ' } else { c })
+        .collect::<String>();
+
+    let mut scored: Vec<(String, f32)> = Vec::new();
+    for raw_line in collapsed.lines() {
+        let line = strip_short_window_style_suffix(raw_line.trim());
+        if line.is_empty() {
+            continue;
+        }
+        if should_hard_drop_line(line) {
+            continue;
+        }
+        if host_only_line().is_match(line) {
+            continue;
+        }
+        if path_only_line().is_match(line) {
+            continue;
+        }
+        let score = line_content_score(line);
+        if score <= 0.0 {
+            continue;
+        }
+        scored.push((line.to_string(), score));
+    }
+
+    if scored.is_empty() {
+        return String::new();
+    }
+
+    let max_s = scored
+        .iter()
+        .map(|(_, s)| *s)
+        .fold(0.0f32, |a, b| a.max(b))
+        .max(1e-6);
+
+    let ratio = config.ocr_line_score_ratio.clamp(0.0, 1.0);
+    let threshold = max_s * ratio;
+
+    let mut kept: Vec<String> = Vec::new();
+    for (line, score) in &scored {
+        if *score >= threshold {
+            kept.push(line.clone());
+        }
+    }
+
+    if kept.is_empty() {
+        // Fallback: keep the strongest few lines so we never embed an empty capture.
+        let mut order: Vec<usize> = (0..scored.len()).collect();
+        order.sort_by(|&a, &b| {
+            scored[b]
+                .1
+                .partial_cmp(&scored[a].1)
+                .unwrap_or(Ordering::Equal)
+        });
+        let take = order.len().min(3);
+        let mut pick = order.into_iter().take(take).collect::<Vec<_>>();
+        pick.sort();
+        for i in pick {
+            kept.push(scored[i].0.clone());
+        }
+    }
+
+    let mut joined = kept.join("\n");
+    joined = normalize_text(&joined);
+
+    if config.ocr_emphasize_top && !scored.is_empty() && !joined.is_empty() {
+        let best_idx = scored
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let best = &scored[best_idx].0;
+        if best.len() >= 24 {
+            joined.push_str("\n\n");
+            joined.push_str(best);
+        }
+    }
+
+    normalize_text(&joined)
+}
+
+/// Many UIs render "Document title — Product" on one OCR line; strip only when the right side looks
+/// like a short window/app name (few words, no sentence punctuation), not a subtitle.
+fn strip_short_window_style_suffix(line: &str) -> &str {
+    for sep in [" — ", " – ", " - "] {
+        if let Some(pos) = line.rfind(sep) {
+            let left = line[..pos].trim();
+            let right = line[pos + sep.len()..].trim();
+            let lc = left.chars().count();
+            let rc = right.chars().count();
+            let rw = right.split_whitespace().count();
+            if right.contains('.') || right.contains('?') || right.contains('!') {
+                continue;
+            }
+            if lc >= 20 && rc <= 28 && rw <= 3 && rc <= lc {
+                return left;
+            }
+        }
+    }
+    line
+}
+
+fn should_hard_drop_line(line: &str) -> bool {
+    let t = line.trim();
+    if t.len() <= 2 {
+        return true;
+    }
+    if t.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()) {
+        return true;
+    }
+    let alnum = t.chars().filter(|c| c.is_alphanumeric()).count();
+    if alnum < 2 && !t.chars().any(|c| c.is_alphabetic()) {
+        return true;
+    }
+    false
+}
+
+/// Higher score ≈ more likely narrative body; lower ≈ labels, chrome, stray tokens (any app).
+fn line_content_score(line: &str) -> f32 {
+    let len = line.chars().count();
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let wc = words.len().max(1);
+
+    let mut s = (len as f32).ln_1p() * (wc as f32).ln_1p();
+
+    if len >= 80 {
+        s *= 1.15;
+    }
+    if line.contains('.') || line.contains('?') || line.contains('!') {
+        if len > 25 {
+            s *= 1.3;
+        }
+    }
+
+    let letters = line.chars().filter(|c| c.is_alphabetic()).count();
+    let non_alnum = line
+        .chars()
+        .filter(|c| !c.is_alphanumeric() && !c.is_whitespace())
+        .count();
+    if letters + non_alnum > 0 {
+        let noise = non_alnum as f32 / (letters + non_alnum) as f32;
+        if noise > 0.38 {
+            s *= 0.2;
+        } else if noise > 0.22 {
+            s *= 0.55;
+        }
+    }
+
+    if len < 14 {
+        s *= 0.35;
+    }
+    if wc == 1 && len < 28 {
+        s *= 0.3;
+    }
+
+    if wc >= 2 && wc <= 5 && len < 48 {
+        let caps = words
+            .iter()
+            .filter(|w| {
+                w.chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+            })
+            .count();
+        if caps == wc {
+            s *= 0.5;
+        }
+    }
+
+    s.max(0.0)
 }
 
 fn chunk_text(input: &str, chunk_size: usize, overlap: usize) -> Vec<String> {

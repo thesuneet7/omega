@@ -209,7 +209,8 @@ Those embeddings then feed Phase 3 (semantic stitching) and Phase 4 (summaries).
 
 Phase 2 turns the Phase 1 session log into a production-ready ingestion pipeline:
 
-- Canonical text per capture (metadata + OCR)
+- **Semantic canonical text (default)** for embeddings: coarse `app` + **cleaned OCR body** (no per-capture timestamp/window title in the embedded string — those change every frame and break clustering)
+- **OCR cleanup (default)**: app-agnostic line scoring (length, words, sentence shape, symbol noise); drops URLs/paths; optional generic `title — short tail` strip; keeps lines within a **relative score band** so UI chrome is down-ranked without naming specific apps
 - Optional PII redaction (email/phone/card-like patterns)
 - Smart chunking with overlap for long OCR blocks
 - Embeddings per chunk (document task type)
@@ -219,7 +220,7 @@ Phase 2 turns the Phase 1 session log into a production-ready ingestion pipeline
 
 ### Run with cloud embeddings (recommended)
 
-Uses the **Gemini embeddings API** by default.
+Uses the **Gemini embeddings API** by default. The default embedding model is **`gemini-embedding-001`** (stable, text-only, cost-efficient). You can still set `OMEGA_EMBED_MODEL=text-embedding-004` for legacy compatibility.
 
 Create a local `.env` file once (already supported by the app):
 
@@ -270,10 +271,145 @@ cargo run -- phase2 --input logs/capture-session-*.json
 
 ```bash
 OMEGA_PHASE2_DB_PATH=logs/phase2.db
+OMEGA_EMBED_MODEL=gemini-embedding-001
 OMEGA_CHUNK_SIZE_CHARS=1200
 OMEGA_CHUNK_OVERLAP_CHARS=200
 OMEGA_REDACT_PII=true
 OMEGA_EMBED_MAX_RETRIES=3
 OMEGA_EMBED_RETRY_BASE_DELAY_MS=500
 ```
+
+**Canonical + OCR (clustering / Phase 3):**
+
+```bash
+# Default: semantic embeddings + cleaned OCR (recommended for Phase 3).
+OMEGA_PHASE2_CANONICAL_MODE=semantic
+OMEGA_PHASE2_OCR_CLEAN=true
+# Keep lines with score >= this fraction of the strongest line in the same capture (lower = stricter).
+OMEGA_PHASE2_OCR_LINE_SCORE_RATIO=0.12
+# Duplicate the strongest line once at the end so the embedding emphasizes real body text.
+OMEGA_PHASE2_OCR_EMPHASIS_TOP=true
+
+# Legacy: verbose canonical string (timestamp, window_title, event, resolution in the embedded text).
+OMEGA_PHASE2_CANONICAL_MODE=full
+```
+
+After changing canonical mode or OCR cleaning, **re-run Phase 2** so chunks and embeddings are rebuilt. For a clean Phase 3 pass, remove old bucket rows or use a fresh DB, e.g.:
+
+```bash
+sqlite3 logs/phase2.db "DELETE FROM task_bucket_items; DELETE FROM task_buckets;"
+```
+
+(or delete `logs/phase2.db` and re-ingest).
+
+---
+
+## Phase 3 (Semantic Stitching) - Build it
+
+Phase 3 turns individual Phase 2 chunks into higher-level **Task Buckets** using
+semantic similarity and recency weighting.
+
+Exactly what this phase does:
+
+- Reads chunk embeddings and metadata from `logs/phase2.db`
+- Loads existing task buckets (if present) so stitching is incremental across runs
+- For each unassigned chunk:
+  - Computes cosine similarity against active bucket centroids
+  - Applies a time-decay multiplier (`exp(-lambda * delta_t)`)
+  - Assigns to the best existing bucket if score >= threshold
+  - Otherwise creates a new bucket
+- Updates bucket centroid as a running average after each assignment
+- Persists bucket state + item assignments in SQLite
+- Writes an artifact JSON: `logs/phase3-stitching-<unix_ts>.json` (each bucket includes **first/last capture time** and **distinct app names** for quick sanity checks before Phase 4)
+
+### Run Phase 3
+
+```bash
+cargo run -- phase3
+```
+
+Optional arguments:
+
+```bash
+cargo run -- phase3 --db logs/phase2.db --output logs/phase3-stitching-custom.json
+```
+
+### Phase 3 tuning knobs
+
+Use the **same** `OMEGA_EMBEDDING_BACKEND` and `OMEGA_EMBED_MODEL` as Phase 2 so stitching reads the intended embedding rows (avoids duplicates when multiple models exist in `embeddings`).
+
+```bash
+OMEGA_PHASE3_DB_PATH=logs/phase2.db
+OMEGA_EMBEDDING_BACKEND=gemini
+OMEGA_EMBED_MODEL=gemini-embedding-001
+OMEGA_PHASE3_MATCH_THRESHOLD=0.60
+OMEGA_PHASE3_DECAY_LAMBDA=0.00002
+OMEGA_PHASE3_ACTIVE_WINDOW_MINS=15
+```
+
+### SQLite tables used by Phase 3
+
+- `task_buckets`
+  - bucket centroid vector, item count, created/last-active timestamps
+- `task_bucket_items`
+  - chunk -> bucket assignment, source timestamp, match score, new-bucket flag
+
+This gives you a local semantic context layer that Phase 4 can summarize directly.
+
+---
+
+## Phase 4 (Summaries) — Run it
+
+Phase 4 turns each **task bucket** into a **structured, human-readable summary** (title, one-liner, detailed summary, tags, confidence, caveats) using an LLM, with **production-style** behavior:
+
+**By default, summaries come from the Gemini API** (`OMEGA_PHASE4_BACKEND=gemini`, same key as Phase 2). The only alternative is **`stub`**, which does **not** call an LLM — it writes deterministic placeholder text for tests or air‑gapped runs. There is no other summarization path in this repo.
+
+- **Idempotency**: Skips a bucket when the **input fingerprint** (SHA-256 of sorted chunk hashes) is unchanged **and** the stored **`prompt_version`** matches the current binary (so you do not pay for duplicate API calls on re-runs).
+- **Prompt upgrades**: When you bump `PROMPT_VERSION` in code, existing rows are **re-summarized** automatically unless you rely on unchanged fingerprints only — the version check forces refresh when the prompt/schema changes.
+- **Retries**: Same exponential backoff pattern as Phase 2 for 429/5xx on Gemini.
+- **Large buckets**: Long OCR is **truncated** head/tail with an explicit marker (`OMEGA_PHASE4_MAX_INPUT_CHARS`, default 48k).
+- **Artifacts + DB**: Writes `logs/phase4-summaries-<unix_ts>.json` and persists rows in SQLite table `task_bucket_summaries`.
+
+### Run Phase 4 (Gemini, default)
+
+Requires `OMEGA_GEMINI_API_KEY` (same as Phase 2).
+
+```bash
+cargo run -- phase4
+```
+
+Optional:
+
+```bash
+cargo run -- phase4 --db logs/phase2.db --output logs/my-phase4.json
+cargo run -- phase4 --force          # re-summarize every bucket
+cargo run -- phase4 --dry-run        # no API calls; inspect sizing/fingerprints
+```
+
+### Run Phase 4 without network (stub)
+
+Deterministic placeholder summaries — useful for CI or validating the pipeline:
+
+```bash
+export OMEGA_PHASE4_BACKEND=stub
+cargo run -- phase4
+```
+
+### Phase 4 tuning knobs
+
+```bash
+OMEGA_PHASE4_DB_PATH=logs/phase2.db
+OMEGA_PHASE4_BACKEND=gemini|stub
+OMEGA_PHASE4_MODEL=gemini-2.5-flash-lite
+OMEGA_PHASE4_MAX_INPUT_CHARS=48000
+OMEGA_PHASE4_MAX_RETRIES=3
+OMEGA_PHASE4_RETRY_BASE_DELAY_MS=800
+OMEGA_PHASE4_FORCE=true
+OMEGA_PHASE4_DRY_RUN=true
+```
+
+### SQLite tables used by Phase 4
+
+- `task_bucket_summaries`
+  - `bucket_id`, `input_fingerprint`, `summary_json` (full structured record), `model`, `backend`, `prompt_version`, `generated_at_epoch_secs`
 
