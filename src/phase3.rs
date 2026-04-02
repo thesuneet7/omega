@@ -118,7 +118,22 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
     let mut buckets_created = 0usize;
     let mut chunks_assigned = 0usize;
     let mut chunks_skipped_existing_assignment = 0usize;
-    let candidates = load_candidate_chunks(&conn, &config.embedding_backend, &config.embed_model)?;
+    let mut embedding_backend = config.embedding_backend.clone();
+    let mut embed_model = config.embed_model.clone();
+    let mut candidates = load_candidate_chunks(&conn, &embedding_backend, &embed_model)?;
+    if candidates.is_empty() {
+        if let Some((b, m)) = dominant_embedding_backend_model(&conn)? {
+            if b != embedding_backend || m != embed_model {
+                eprintln!(
+                    "phase3: no embedding rows for backend={embedding_backend} model={embed_model}; \
+                     retrying with dominant DB pair backend={b} model={m}"
+                );
+                embedding_backend = b;
+                embed_model = m;
+                candidates = load_candidate_chunks(&conn, &embedding_backend, &embed_model)?;
+            }
+        }
+    }
 
     for chunk in &candidates {
         if has_existing_assignment(&conn, &chunk.chunk_hash)? {
@@ -177,8 +192,8 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
         summary: StitchSummary {
             db_path: config.db_path.display().to_string(),
             generated_at_epoch_secs: now_epoch_secs(),
-            embedding_backend: config.embedding_backend.clone(),
-            embed_model: config.embed_model.clone(),
+            embedding_backend: embedding_backend.clone(),
+            embed_model: embed_model.clone(),
             candidates_seen: candidates.len(),
             chunks_assigned,
             chunks_skipped_existing_assignment,
@@ -220,6 +235,27 @@ CREATE TABLE IF NOT EXISTS task_bucket_items (
     )
     .context("failed creating phase3 schema")?;
     Ok(())
+}
+
+/// When env defaults do not match phase2's stored `embeddings` rows (e.g. hash vs gemini), pick
+/// the backend/model pair with the most rows so stitching still runs.
+fn dominant_embedding_backend_model(conn: &Connection) -> Result<Option<(String, String)>> {
+    let row: Option<(String, String)> = conn
+        .query_row(
+            r#"
+            SELECT backend, model
+            FROM embeddings
+            WHERE task_type = 'RETRIEVAL_DOCUMENT'
+            GROUP BY backend, model
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+            "#,
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .context("read dominant embedding backend/model")?;
+    Ok(row)
 }
 
 fn load_candidate_chunks(

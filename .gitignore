@@ -1,1 +1,16 @@
 .env
+.env.*
+
+# Rust
+/target/
+
+# Node (ui/)
+ui/node_modules/
+ui/dist/
+
+# Local logs and state
+/logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db

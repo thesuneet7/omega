@@ -2,6 +2,8 @@
 name = "sensor_layer"
 version = "0.1.0"
 edition = "2021"
+# Local HTTP server for the Electron UI (`omega-api`). Phase 1 capture: `cargo run --bin sensor_layer`.
+default-run = "omega-api"
 
 [dependencies]
 image = "0.25"
@@ -18,4 +20,10 @@ hex = "0.4"
 dotenvy = "0.15"
 rusqlite = { version = "0.32", features = ["bundled"] }
 regex = "1"
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tower-http = { version = "0.5", features = ["cors"] }
 
+[[bin]]
+name = "omega-api"
+path = "src/bin/omega_api.rs"

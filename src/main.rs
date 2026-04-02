@@ -59,8 +59,14 @@ fn spawn_event_listener(tx: crossbeam_channel::Sender<SensorEvent>) {
     });
 }
 
+fn capture_logs_dir() -> PathBuf {
+    PathBuf::from(
+        std::env::var("OMEGA_APP_LOGS_DIR").unwrap_or_else(|_| "logs".to_string()),
+    )
+}
+
 fn save_logs_to_file(log_file: &SessionLogFile) -> Result<PathBuf, String> {
-    let logs_dir = PathBuf::from("logs");
+    let logs_dir = capture_logs_dir();
     fs::create_dir_all(&logs_dir).map_err(|e| format!("failed to create logs directory: {e}"))?;
 
     let ts = SystemTime::now()

@@ -16,13 +16,13 @@ cat req.txt
 cp .env.example .env
 # Fill OMEGA_GEMINI_API_KEY in .env
 
-# 1) Run Phase 1 natively
-cargo run -- capture
+# 1) Run Phase 1 natively (sensor CLI; default binary is omega-api — use explicit bin)
+cargo run --bin sensor_layer
 
 # Stop with Ctrl+C after activity is captured.
 
 # 2) Run Phase 2 natively
-cargo run -- phase2
+cargo run --bin sensor_layer -- phase2
 ```
 
 ---
@@ -43,7 +43,7 @@ cargo run -- phase2
      - **Scroll**
        - Does **not** capture immediately.
        - Marks `scroll_pending = true` and remembers the last scroll time.
-       - A periodic `tick()` is called from the main loop; if scroll has been idle for `scroll_idle_delay` (default 1500 ms), one capture is attempted with `event_type = "ScrollStopped"`.
+       - A periodic `tick()` is called from the main loop; if scroll has been idle for `scroll_idle_delay` (default 500 ms), one capture is attempted with `event_type = "ScrollStopped"`.
 
 3. **Global throttling (cooldown)**
    - Before doing any screenshot work, the engine checks:
@@ -160,7 +160,7 @@ From the project root:
 ```bash
 cd /Users/suneet/Desktop/Folders/omega
 source "$HOME/.cargo/env"   # if using rustup in a new shell
-cargo run
+cargo run --bin sensor_layer
 ```
 
 On first run you may need to:
@@ -231,7 +231,7 @@ cp .env.example .env
 Then fill your key in `.env` and run normally:
 
 ```bash
-cargo run -- phase2 --input logs/capture-session-*.json
+cargo run --bin sensor_layer -- phase2 --input logs/capture-session-*.json
 ```
 
 By default this writes:
@@ -255,7 +255,7 @@ export OMEGA_OPENAI_API_KEY="..."
 export OMEGA_OPENAI_BASE_URL="https://api.openai.com"
 export OMEGA_EMBED_MODEL="text-embedding-3-small"
 
-cargo run -- phase2 --input logs/capture-session-*.json
+cargo run --bin sensor_layer -- phase2 --input logs/capture-session-*.json
 ```
 
 ### Run without network (dev/test fallback)
@@ -264,7 +264,7 @@ This uses a deterministic hash-based embedding (not semantic; for pipeline valid
 
 ```bash
 export OMEGA_EMBEDDING_BACKEND=hash
-cargo run -- phase2 --input logs/capture-session-*.json
+cargo run --bin sensor_layer -- phase2 --input logs/capture-session-*.json
 ```
 
 ### Phase 2 tuning knobs
@@ -325,13 +325,13 @@ Exactly what this phase does:
 ### Run Phase 3
 
 ```bash
-cargo run -- phase3
+cargo run --bin sensor_layer -- phase3
 ```
 
 Optional arguments:
 
 ```bash
-cargo run -- phase3 --db logs/phase2.db --output logs/phase3-stitching-custom.json
+cargo run --bin sensor_layer -- phase3 --db logs/phase2.db --output logs/phase3-stitching-custom.json
 ```
 
 ### Phase 3 tuning knobs
@@ -375,15 +375,15 @@ Phase 4 turns each **task bucket** into a **structured, human-readable summary**
 Requires `OMEGA_GEMINI_API_KEY` (same as Phase 2).
 
 ```bash
-cargo run -- phase4
+cargo run --bin sensor_layer -- phase4
 ```
 
 Optional:
 
 ```bash
-cargo run -- phase4 --db logs/phase2.db --output logs/my-phase4.json
-cargo run -- phase4 --force          # re-summarize every bucket
-cargo run -- phase4 --dry-run        # no API calls; inspect sizing/fingerprints
+cargo run --bin sensor_layer -- phase4 --db logs/phase2.db --output logs/my-phase4.json
+cargo run --bin sensor_layer -- phase4 --force          # re-summarize every bucket
+cargo run --bin sensor_layer -- phase4 --dry-run        # no API calls; inspect sizing/fingerprints
 ```
 
 ### Run Phase 4 without network (stub)
@@ -392,7 +392,7 @@ Deterministic placeholder summaries — useful for CI or validating the pipeline
 
 ```bash
 export OMEGA_PHASE4_BACKEND=stub
-cargo run -- phase4
+cargo run --bin sensor_layer -- phase4
 ```
 
 ### Phase 4 tuning knobs
@@ -412,4 +412,57 @@ OMEGA_PHASE4_DRY_RUN=true
 
 - `task_bucket_summaries`
   - `bucket_id`, `input_fingerprint`, `summary_json` (full structured record), `model`, `backend`, `prompt_version`, `generated_at_epoch_secs`
+
+---
+
+## Session App MVP (Electron + React + Rust API)
+
+This repo includes an MVP desktop session app:
+
+- Session list (from `logs/capture-session-*.json`)
+- Summary editor (generated seed + manual edits)
+- Revision history (restore any prior revision)
+- Pipeline actions (`phase2`, `phase3`, `phase4`) from the UI
+
+### App stack layout
+
+- Rust backend commands and app state:
+  - `src/app_models.rs`
+  - `src/app_db.rs`
+  - `src/app_commands.rs`
+- Local HTTP API for the UI (Electron talks to this instead of Tauri IPC):
+  - `src/bin/omega_api.rs` (binds `127.0.0.1:17421` by default; override with `OMEGA_API_PORT`)
+- Electron shell + preload:
+  - `ui/electron/main.cjs`, `ui/electron/preload.cjs`
+- React frontend:
+  - `ui/`
+
+### Run the MVP
+
+1) Install frontend dependencies:
+
+```bash
+cd ui
+npm install
+```
+
+2) From the repo root, start the desktop app (builds `omega-api`, starts Vite, opens Electron):
+
+```bash
+make desktop
+# or: cd ui && npm run electron:dev
+```
+
+**Browser-only dev**: run two terminals — `cargo run --bin omega-api` (or `make omega-api`) and `cd ui && npm run dev` — then open `http://localhost:5173`.
+
+### Smoke test checklist
+
+1. Generate at least one capture log:
+   - `cargo run --bin sensor_layer` then stop with `Ctrl+C`
+2. Open app and confirm a session appears in the left panel.
+3. Select session and confirm summary text loads.
+4. Edit title/body and click **Save Revision**.
+5. Confirm a new row appears in **Revision History**.
+6. Click **Restore** on an old revision and verify editor updates.
+7. Run **Phase2**, **Phase3**, **Phase4** buttons and confirm run rows appear in pipeline history.
 

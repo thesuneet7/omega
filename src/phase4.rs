@@ -512,7 +512,8 @@ fn fingerprint_for_bucket(chunk_hashes: &[String]) -> String {
     hex::encode(hasher.finalize())
 }
 
-fn init_phase4_schema(conn: &Connection) -> Result<()> {
+/// Ensures `task_bucket_summaries` exists (safe to call before reads or after phase2-only DB use).
+pub fn init_phase4_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
 CREATE TABLE IF NOT EXISTS task_bucket_summaries (
