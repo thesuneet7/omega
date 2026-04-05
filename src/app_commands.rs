@@ -1,12 +1,68 @@
 use crate::app_db;
-use crate::app_models::{PipelineRunRecord, SessionListItem, SessionSummaryState};
+use crate::app_models::{PipelineRunRecord, SessionBucket, SessionListItem, SessionSummaryState};
 use crate::{phase2, phase3, phase4};
 use anyhow::{Context, Result};
+use regex::Regex;
 use rusqlite::Connection;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct StoredSummaryV1 {
+    version: u32,
+    buckets: Vec<SessionBucket>,
+}
+
+fn encode_buckets_storage(buckets: &[SessionBucket]) -> Result<String> {
+    serde_json::to_string(&StoredSummaryV1 {
+        version: 1,
+        buckets: buckets.to_vec(),
+    })
+    .context("encode summary storage")
+}
+
+fn parse_legacy_bucket_markdown(body: &str) -> Option<Vec<SessionBucket>> {
+    if !body.contains("## Bucket ") {
+        return None;
+    }
+    let re = Regex::new(r"(?m)^## Bucket (\d+): (.+)$").ok()?;
+    let mut spans: Vec<(usize, usize, i64, String)> = Vec::new();
+    for cap in re.captures_iter(body) {
+        let whole = cap.get(0)?;
+        let id: i64 = cap.get(1)?.as_str().parse().ok()?;
+        let title = cap.get(2)?.as_str().to_string();
+        spans.push((whole.start(), whole.end(), id, title));
+    }
+    if spans.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for i in 0..spans.len() {
+        let (_, header_end, id, title) = &spans[i];
+        let body_end = spans.get(i + 1).map(|s| s.0).unwrap_or(body.len());
+        let body_text = body[*header_end..body_end].trim().to_string();
+        out.push(SessionBucket {
+            bucket_id: *id,
+            title: title.clone(),
+            body: body_text,
+        });
+    }
+    Some(out)
+}
+
+fn buckets_from_body(body: &str) -> Vec<SessionBucket> {
+    let t = body.trim();
+    if t.starts_with('{') {
+        if let Ok(v) = serde_json::from_str::<StoredSummaryV1>(t) {
+            if v.version == 1 {
+                return v.buckets;
+            }
+        }
+    }
+    parse_legacy_bucket_markdown(body).unwrap_or_default()
+}
 
 #[derive(Debug, Deserialize)]
 struct CaptureSessionSummary {
@@ -58,10 +114,11 @@ fn collect_session_files(base_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>)> {
+fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>, Vec<SessionBucket>)> {
     if !db_path.exists() {
         return Ok((
             "Run phase2 -> phase3 -> phase4 to generate summaries.".to_string(),
+            Vec::new(),
             Vec::new(),
         ));
     }
@@ -76,7 +133,7 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>)> {
         .prepare(
             "SELECT bucket_id, summary_json, generated_at_epoch_secs
              FROM task_bucket_summaries
-             ORDER BY generated_at_epoch_secs DESC, bucket_id DESC
+             ORDER BY bucket_id ASC
              LIMIT 8",
         )
         .context("prepare task_bucket_summaries query")?;
@@ -89,7 +146,7 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>)> {
         })
         .context("query summaries")?;
 
-    let mut body_parts = Vec::new();
+    let mut buckets = Vec::new();
     let mut ids = Vec::new();
     for row in rows {
         let (bucket_id, summary_json) = row.context("decode summary row")?;
@@ -98,7 +155,8 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>)> {
         let title = parsed
             .get("title")
             .and_then(|v| v.as_str())
-            .unwrap_or("Untitled bucket");
+            .unwrap_or("Untitled")
+            .to_string();
         let one_liner = parsed
             .get("one_liner")
             .and_then(|v| v.as_str())
@@ -107,21 +165,26 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>)> {
             .get("detailed_summary")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
-        body_parts.push(format!(
-            "## Bucket {bucket_id}: {title}\n\n{one_liner}\n\n{detail}\n"
-        ));
+        let body = format!("{one_liner}\n\n{detail}").trim().to_string();
+        buckets.push(SessionBucket {
+            bucket_id,
+            title,
+            body,
+        });
     }
 
-    if body_parts.is_empty() {
+    if buckets.is_empty() {
         if let Some(fallback) = fallback_summary_from_ingested_chunks(db_path)? {
-            return Ok((fallback, ids));
+            return Ok((fallback, ids, Vec::new()));
         }
         return Ok((
             "No bucket summaries in phase DB yet. Run phase4 first.".to_string(),
             ids,
+            Vec::new(),
         ));
     }
-    Ok((body_parts.join("\n"), ids))
+    let storage = encode_buckets_storage(&buckets)?;
+    Ok((storage, ids, buckets))
 }
 
 /// When Phase 4 wrote nothing (no buckets, API failures, or skipped), still return useful text
@@ -170,8 +233,15 @@ fn fallback_summary_from_ingested_chunks(db_path: &Path) -> Result<Option<String
 }
 
 pub fn load_generated_summary_text() -> Result<String, String> {
-    let (body, _) = load_generated_summary(&phase_db_path()).map_err(|e| e.to_string())?;
-    Ok(body)
+    let (storage, _, buckets) = load_generated_summary(&phase_db_path()).map_err(|e| e.to_string())?;
+    if buckets.is_empty() {
+        return Ok(storage);
+    }
+    Ok(buckets
+        .iter()
+        .map(|b| format!("## {}\n\n{}", b.title, b.body.trim()))
+        .collect::<Vec<_>>()
+        .join("\n\n"))
 }
 
 fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
@@ -180,16 +250,18 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
         app_db::get_summary_row(&app_db, session_key)?
     {
         let revisions = app_db::list_revisions(&app_db, summary_id)?;
+        let buckets = buckets_from_body(&body);
         return Ok(SessionSummaryState {
             session_key: session_key.to_string(),
             title,
             body,
             source_bucket_ids,
             revisions,
+            buckets,
         });
     }
 
-    let (generated_body, source_bucket_ids) = load_generated_summary(&phase_db_path())?;
+    let (generated_body, source_bucket_ids, buckets) = load_generated_summary(&phase_db_path())?;
     let generated_title = format!("Session Summary - {session_key}");
     let summary_id = app_db::upsert_current_summary(
         &app_db,
@@ -212,6 +284,7 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
         body: generated_body,
         source_bucket_ids,
         revisions,
+        buckets,
     })
 }
 
@@ -267,12 +340,14 @@ pub fn save_summary_revision(
     )
     .map_err(|e| e.to_string())?;
     let revisions = app_db::list_revisions(&conn, summary_id).map_err(|e| e.to_string())?;
+    let buckets = buckets_from_body(&body);
     Ok(SessionSummaryState {
         session_key,
         title,
         body,
         source_bucket_ids,
         revisions,
+        buckets,
     })
 }
 

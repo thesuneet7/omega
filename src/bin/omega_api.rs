@@ -56,6 +56,11 @@ struct FetchSummaryResponse {
     summary: String,
 }
 
+#[derive(serde::Serialize)]
+struct SessionStatusResponse {
+    status: &'static str,
+}
+
 fn now_epoch_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -252,6 +257,46 @@ async fn fetch_summary(
     Ok(Json(FetchSummaryResponse { summary }))
 }
 
+async fn start_session(
+    State(state): State<ApiState>,
+) -> Result<Json<SessionStatusResponse>, (StatusCode, String)> {
+    let mut phase1 = lock_phase1(&state.phase1);
+    ensure_phase1_running(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(SessionStatusResponse { status: "running" }))
+}
+
+async fn end_session(
+    State(state): State<ApiState>,
+) -> Result<Json<FetchSummaryResponse>, (StatusCode, String)> {
+    {
+        let mut phase1 = lock_phase1(&state.phase1);
+        stop_phase1_capture(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    }
+
+    let latest_log = latest_runtime_capture_log(state.runtime_start_epoch_secs)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "No runtime capture log found yet. Let phase1 run and interact, then end the session."
+                    .to_string(),
+            )
+        })?;
+
+    let input_ref = latest_log.display().to_string();
+    let summary = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
+        app_commands::run_pipeline_stage("phase3".to_string(), None)?;
+        app_commands::run_pipeline_stage("phase4".to_string(), None)?;
+        app_commands::load_generated_summary_text()
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("pipeline task join failed: {e}")))?
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    Ok(Json(FetchSummaryResponse { summary }))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Match `sensor_layer` / CLI: load `.env` so OMEGA_EMBEDDING_BACKEND, keys, etc. apply to
@@ -270,8 +315,8 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(17_421);
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
-    let mut phase1_state = Phase1State { child: None };
-    ensure_phase1_running(&mut phase1_state).map_err(anyhow::Error::msg)?;
+    // Phase 1 starts only when the client calls POST /api/session/start (idle by default).
+    let phase1_state = Phase1State { child: None };
     let shared_state = ApiState {
         runtime_start_epoch_secs,
         phase1: Arc::new(Mutex::new(phase1_state)),
@@ -285,6 +330,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/summary-revisions", get(list_summary_revisions))
         .route("/api/pipeline/run", post(run_pipeline))
         .route("/api/pipeline/runs", get(list_pipeline_runs))
+        .route("/api/session/start", post(start_session))
+        .route("/api/session/end", post(end_session))
         .route("/api/fetch-summary", post(fetch_summary))
         .with_state(shared_state)
         .layer(

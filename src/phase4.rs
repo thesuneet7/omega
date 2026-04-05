@@ -177,7 +177,10 @@ struct GeminiPart {
 struct LlmJsonShape {
     title: Option<String>,
     one_liner: Option<String>,
+    /// Short second-person framing (1–3 sentences). Optional if `key_points` is exhaustive.
     detailed_summary: Option<String>,
+    /// One discrete takeaway per entry; merged into stored `detailed_summary` as markdown bullets.
+    key_points: Option<Vec<String>>,
     primary_apps: Option<Vec<String>>,
     tags: Option<Vec<String>>,
     confidence_0_1: Option<f32>,
@@ -477,7 +480,7 @@ fn build_user_prompt(agg: &AggregatedBucket, body: &str, truncated: bool) -> Str
         _ => "time range: unknown".to_string(),
     };
     format!(
-        r#"You summarize a single "task bucket" from a user's on-device activity log (OCR from screenshots). The user opted in; content may include work context. Be concise and accurate. Do not invent URLs, names, or actions not supported by the text.
+        r#"You summarize one "task bucket" from an on-device activity log (OCR from screenshots). The owner opted in; content may include work or personal context. Be faithful to the text: do not invent URLs, product names, numbers, or steps that are not supported by the OCR. Prefer completeness over brevity for important material.
 
 {tw}
 Apps seen in this bucket: {apps}
@@ -488,14 +491,23 @@ OCR segments (chronological):
 {body}
 ---
 
+Voice: In "one_liner" and "detailed_summary", address the bucket owner as "you" (second person). Do not write "the user", "they", or similar.
+
+Coverage: The OCR may contain articles, guides, tables, numbered lists, phases, metrics, and links. Your job is to preserve the substance point-by-point:
+- Include every major heading, phase, and numbered step that appears.
+- For tables, include one key_point (or more) per row: metric name, what it measures, and any threshold or target given.
+- Include concrete examples, definitions, and named frameworks when present (e.g. quoted terms like "workflow-value fit").
+- Include link text and URLs only if they appear verbatim in the OCR (no guessed links).
+
 Respond with a single JSON object ONLY (no markdown fences), keys:
-- "title": short task title (max ~80 chars)
-- "one_liner": one sentence what the user was doing
-- "detailed_summary": 2-5 sentences
+- "title": short task title (max ~80 chars), neutral phrasing (not "you")
+- "one_liner": exactly one sentence, second person ("you ..."), capturing the main focus of what you were reading or doing in this bucket
+- "detailed_summary": 1-3 short sentences in second person that frame the bucket (optional if key_points already cover context)
+- "key_points": array of strings; each string is ONE atomic takeaway (no leading "- "). Order should follow the OCR when possible. Aim to list every important claim, step, metric, and example—err on the side of too many points rather than merging distinct ideas into one vague line. Typical buckets need many entries (often 15-40+ when the source is long); short pages need fewer.
 - "primary_apps": array of app names most relevant (subset of seen apps)
 - "tags": 3-8 lowercase snake_case tags
 - "confidence_0_1": number 0-1 how confident you are
-- "caveats": optional string if OCR was noisy or ambiguous"#,
+- "caveats": optional string if OCR was noisy, duplicated, or ambiguous"#,
         tw = tw,
         apps = apps,
         trunc = truncated,
@@ -622,9 +634,12 @@ fn gemini_summarize(
         #[serde(rename = "responseMimeType")]
         response_mime_type: &'static str,
         temperature: f32,
+        /// Long bucket summaries need room for many `key_points` without truncating JSON.
+        #[serde(rename = "maxOutputTokens")]
+        max_output_tokens: u32,
     }
 
-    let system_preamble = "You are a precise analyst for on-device activity logs. Output JSON only.";
+    let system_preamble = "You are a precise analyst for on-device activity logs (OCR). Output a single JSON object only. Write for the person whose screen was captured: use second person (you/your) in one_liner and detailed_summary. Never refer to them as \"the user\", \"they\", or \"the reader\".";
 
     let full_text = format!("{system_preamble}\n\n{user_text}");
     let body = GenBody {
@@ -635,6 +650,7 @@ fn gemini_summarize(
         generation_config: GenConfig {
             response_mime_type: "application/json",
             temperature: 0.2,
+            max_output_tokens: 8192,
         },
     };
 
@@ -683,6 +699,43 @@ fn gemini_summarize(
     Ok(parsed)
 }
 
+fn merge_detailed_summary(j: &LlmJsonShape) -> String {
+    let overview = j.detailed_summary.as_deref().unwrap_or("").trim();
+    let points: Vec<String> = j
+        .key_points
+        .as_ref()
+        .map(|v| {
+            v.iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if points.is_empty() {
+        return overview.to_string();
+    }
+
+    let bullets: String = points
+        .into_iter()
+        .map(|p| {
+            let t = p.trim();
+            if t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ") {
+                t.to_string()
+            } else {
+                format!("- {t}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if overview.is_empty() {
+        bullets
+    } else {
+        format!("{overview}\n\n{bullets}")
+    }
+}
+
 fn llm_to_record(
     bucket_id: i64,
     j: LlmJsonShape,
@@ -692,11 +745,12 @@ fn llm_to_record(
     truncated: bool,
     agg: &AggregatedBucket,
 ) -> BucketSummaryRecord {
+    let detailed_summary = merge_detailed_summary(&j);
     BucketSummaryRecord {
         bucket_id,
         title: j.title.unwrap_or_else(|| "Untitled task".to_string()),
         one_liner: j.one_liner.unwrap_or_default(),
-        detailed_summary: j.detailed_summary.unwrap_or_default(),
+        detailed_summary,
         primary_apps: j.primary_apps.unwrap_or_default(),
         tags: j.tags.unwrap_or_default(),
         confidence_0_1: j.confidence_0_1.unwrap_or(0.5).clamp(0.0, 1.0),

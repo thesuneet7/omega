@@ -6,7 +6,7 @@
 help:
 	@echo "Targets:"
 	@echo "  make install-ui      npm ci in ui/"
-	@echo "  make desktop         Electron + Vite + omega-api (npm run electron:dev in ui/)"
+	@echo "  make desktop         npm ci in ui/ then Electron + Vite + omega-api"
 	@echo "  make desktop-clean   Isolated temp logs/db then desktop (see script)"
 	@echo "  make omega-api       Local HTTP API only (default cargo run)"
 	@echo "  make capture         Phase 1 sensor CLI (cargo run --bin sensor_layer)"
@@ -16,7 +16,7 @@ help:
 install-ui:
 	cd ui && npm ci
 
-desktop:
+desktop: install-ui
 	cd ui && npm run electron:dev
 
 desktop-clean:

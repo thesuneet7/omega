@@ -22,12 +22,21 @@ pub struct SummaryRevision {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SessionBucket {
+    pub bucket_id: i64,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionSummaryState {
     pub session_key: String,
     pub title: String,
     pub body: String,
     pub source_bucket_ids: Vec<i64>,
     pub revisions: Vec<SummaryRevision>,
+    #[serde(default)]
+    pub buckets: Vec<SessionBucket>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

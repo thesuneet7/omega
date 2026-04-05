@@ -17,13 +17,26 @@ export type SummaryRevision = {
   editor_label: string;
 };
 
+export type SessionBucket = {
+  bucket_id: number;
+  title: string;
+  body: string;
+};
+
 export type SessionSummaryState = {
   session_key: string;
   title: string;
   body: string;
   source_bucket_ids: number[];
   revisions: SummaryRevision[];
+  buckets?: SessionBucket[];
 };
+
+const BUCKET_STORE_VERSION = 1;
+
+export function encodeBucketStorage(buckets: SessionBucket[]): string {
+  return JSON.stringify({ version: BUCKET_STORE_VERSION, buckets });
+}
 
 export type PipelineRunRecord = {
   id: number;
@@ -99,6 +112,10 @@ export async function listPipelineRuns(): Promise<PipelineRunRecord[]> {
   return apiGet("/api/pipeline/runs");
 }
 
-export async function fetchRuntimeSummary(): Promise<{ summary: string }> {
-  return apiPost("/api/fetch-summary", {});
+export async function startSession(): Promise<{ status: string }> {
+  return apiPost("/api/session/start", {});
+}
+
+export async function endSession(): Promise<{ summary: string }> {
+  return apiPost("/api/session/end", {});
 }

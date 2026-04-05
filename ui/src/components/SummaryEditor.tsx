@@ -32,26 +32,31 @@ export function SummaryEditor({ initialTitle, initialBody, onSave, saving }: Pro
   return (
     <section className="panel">
       <div className="row">
-        <h2>Summary Editor</h2>
-        <button disabled={saving} onClick={() => void onSave(title, body, false)}>
-          {saving ? "Saving..." : "Save Revision"}
+        <h2 className="section-title">Summary</h2>
+        <button type="button" disabled={saving} onClick={() => void onSave(title, body, false)}>
+          {saving ? "Saving…" : "Save revision"}
         </button>
       </div>
       <input
+        className="input-title"
         value={title}
         onChange={(e) => {
           setTitle(e.target.value);
           setDirty(true);
         }}
-        placeholder="Summary title"
+        placeholder="Title"
+        aria-label="Summary title"
       />
       <textarea
+        className="editor-body"
         value={body}
         onChange={(e) => {
           setBody(e.target.value);
           setDirty(true);
         }}
         rows={18}
+        placeholder="Summary body…"
+        aria-label="Summary body"
       />
     </section>
   );

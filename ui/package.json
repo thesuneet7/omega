@@ -9,9 +9,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "build:rust": "cd .. && cargo build --bin omega-api --bin sensor_layer",
-    "electron": "electron .",
-    "electron:dev": "npm run build:rust && concurrently -k \"npm run dev\" \"wait-on http://localhost:5174 && electron .\"",
-    "start": "npm run build && npm run build:rust && electron ."
+    "electron": "npx electron .",
+    "electron:dev": "npm run build:rust && npx concurrently -k \"npm run dev\" \"npx wait-on http://127.0.0.1:5174 && npx electron .\"",
+    "start": "npm run build && npm run build:rust && npx electron ."
   },
   "dependencies": {
     "react": "^18.3.1",
