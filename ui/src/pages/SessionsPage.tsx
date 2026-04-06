@@ -13,6 +13,7 @@ import {
   type SessionSummaryState,
   type SummaryRevision,
 } from "../lib/api";
+import { sessionListPrimaryLine, sessionListSecondaryLine } from "../lib/sessionDisplay";
 
 type SessionState = "capturing" | "processing" | "idle";
 
@@ -133,7 +134,7 @@ export function SessionsPage() {
         <div className="panel__header">
           <div className="brand">
             <span className="brand__name">Omega</span>
-            <h2 className="brand__title">Sessions</h2>
+            <h2 className="brand__title">Your sessions</h2>
           </div>
           <button type="button" className="btn-ghost btn-small" onClick={() => void refreshSessions()}>
             Refresh
@@ -141,26 +142,41 @@ export function SessionsPage() {
         </div>
         {loading ? <p className="loading-hint">Loading sessions…</p> : null}
         {error ? <p className="error">{error}</p> : null}
-        <ApiUsageMeter sessionKey={selected?.session_key ?? null} refreshToken={usageTick} />
+        <ApiUsageMeter
+          sessionKey={selected?.session_key ?? null}
+          sessionLabel={
+            selected
+              ? sessionListPrimaryLine(selected, {
+                  selectedSessionKey: selected.session_key,
+                  currentSummaryTitle: summary?.title ?? null,
+                })
+              : null
+          }
+          refreshToken={usageTick}
+        />
         <div className="list">
           {sessions.length === 0 && !loading ? (
             <p className="empty-hint">No sessions yet. End a capture run to see it here.</p>
           ) : null}
-          {sessions.map((s) => (
-            <button
-              type="button"
-              key={s.session_key}
-              className={`list-item buttonish ${selected?.session_key === s.session_key ? "active" : ""}`}
-              onClick={() => setSelected(s)}
-            >
-              <div>
-                <span className="session-key">{s.session_key}</span>
-                <div className="muted">
-                  {s.accepted_captures} captures · {Math.floor(s.duration_secs / 60)}m
+          {sessions.map((s) => {
+            const primary = sessionListPrimaryLine(s, {
+              selectedSessionKey: selected?.session_key ?? null,
+              currentSummaryTitle: summary?.title ?? null,
+            });
+            return (
+              <button
+                type="button"
+                key={s.session_key}
+                className={`list-item buttonish ${selected?.session_key === s.session_key ? "active" : ""}`}
+                onClick={() => setSelected(s)}
+              >
+                <div>
+                  <span className="session-list__primary">{primary}</span>
+                  <div className="muted session-list__meta">{sessionListSecondaryLine(s, primary)}</div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </aside>
 
@@ -168,7 +184,7 @@ export function SessionsPage() {
         <section className="panel">
           <div className="row row--top">
             <div>
-              <h2 className="session-headline">Live session</h2>
+              <h2 className="session-headline">Recording</h2>
               <div className="session-status-row">
                 <span className={statusDotClass(sessionState)} aria-hidden />
                 <p className="status-text">{statusMessage}</p>
@@ -192,7 +208,7 @@ export function SessionsPage() {
 
         {!summary ? (
           <section className="panel">
-            <p className="empty-hint">Pick a session from the list to load its summary.</p>
+            <p className="empty-hint">Choose a session on the left to open its summary.</p>
           </section>
         ) : (summary.buckets ?? []).length > 0 ? (
           <BucketSummaryWorkspace

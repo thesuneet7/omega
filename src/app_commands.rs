@@ -263,7 +263,7 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
     }
 
     let (generated_body, source_bucket_ids, buckets) = load_generated_summary(&phase_db_path())?;
-    let generated_title = format!("Session Summary - {session_key}");
+    let generated_title = "Untitled session".to_string();
     let summary_id = app_db::upsert_current_summary(
         &app_db,
         session_key,
@@ -291,6 +291,7 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
 
 pub fn list_sessions() -> Result<Vec<SessionListItem>, String> {
     let files = collect_session_files(&logs_dir()).map_err(|e| e.to_string())?;
+    let app_db = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
     let mut sessions = Vec::new();
     for path in files {
         let raw = fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
@@ -301,6 +302,9 @@ pub fn list_sessions() -> Result<Vec<SessionListItem>, String> {
             .and_then(|s| s.to_str())
             .unwrap_or("unknown-session")
             .to_string();
+        let summary_title = app_db::get_summary_row(&app_db, &session_key)
+            .map_err(|e| e.to_string())?
+            .map(|(_, title, _, _)| title);
         sessions.push(SessionListItem {
             session_key,
             file_path: path.display().to_string(),
@@ -309,6 +313,7 @@ pub fn list_sessions() -> Result<Vec<SessionListItem>, String> {
             duration_secs: parsed.session_summary.session_duration_secs,
             accepted_captures: parsed.session_summary.accepted_captures,
             total_events_seen: parsed.session_summary.total_events_seen,
+            summary_title,
         });
     }
     Ok(sessions)

@@ -10,11 +10,13 @@ function formatUsd(n: number): string {
 
 type Props = {
   sessionKey: string | null;
+  /** Human-readable session name for the selected row (not the internal key). */
+  sessionLabel?: string | null;
   /** Bump after pipeline-affecting actions to refresh immediately. */
   refreshToken?: number;
 };
 
-export function ApiUsageMeter({ sessionKey, refreshToken = 0 }: Props) {
+export function ApiUsageMeter({ sessionKey, sessionLabel, refreshToken = 0 }: Props) {
   const [data, setData] = useState<ApiUsageResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -75,18 +77,24 @@ export function ApiUsageMeter({ sessionKey, refreshToken = 0 }: Props) {
       </p>
       {sessionKey ? (
         <p className="usage-meter__session">
-          <strong>Selected session:</strong>{" "}
-          {session ? formatUsd(session.estimated_cost_usd) : "— (no recorded pipeline cost yet)"}
+          <strong>This session</strong>
+          {sessionLabel ? (
+            <>
+              {" "}
+              <span className="usage-meter__session-name">({sessionLabel})</span>
+            </>
+          ) : null}
+          : {session ? formatUsd(session.estimated_cost_usd) : "— no API cost recorded yet"}
         </p>
       ) : (
-        <p className="usage-meter__session muted">Select a session to see its cost estimate.</p>
+        <p className="usage-meter__session muted">Choose a session to see its estimated cost.</p>
       )}
       <details className="usage-meter__details">
-        <summary>Token estimates</summary>
+        <summary>Estimated token usage</summary>
         <ul className="usage-meter__stats">
-          <li>Embeddings (in): ~{overall.estimated_embed_tokens.toLocaleString()} tok</li>
-          <li>Phase 4 LLM (in): ~{overall.estimated_phase4_input_tokens.toLocaleString()} tok</li>
-          <li>Phase 4 LLM (out): ~{overall.estimated_phase4_output_tokens.toLocaleString()} tok</li>
+          <li>Embeddings: ~{overall.estimated_embed_tokens.toLocaleString()} tokens</li>
+          <li>Summary model (prompt): ~{overall.estimated_phase4_input_tokens.toLocaleString()} tokens</li>
+          <li>Summary model (reply): ~{overall.estimated_phase4_output_tokens.toLocaleString()} tokens</li>
         </ul>
         <p className="usage-meter__note">{overall.pricing_note}</p>
       </details>

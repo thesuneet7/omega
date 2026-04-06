@@ -32,7 +32,7 @@ export function SummaryEditor({ initialTitle, initialBody, onSave, saving }: Pro
   return (
     <section className="panel">
       <div className="row">
-        <h2 className="section-title">Summary</h2>
+        <h2 className="section-title">Session summary</h2>
         <button type="button" disabled={saving} onClick={() => void onSave(title, body, false)}>
           {saving ? "Saving…" : "Save revision"}
         </button>

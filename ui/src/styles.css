@@ -208,13 +208,30 @@ body {
   box-shadow: 0 0 0 1px rgba(61, 214, 197, 0.2);
 }
 
-.session-key {
+.session-list__primary {
   display: block;
   font-weight: 600;
-  font-size: 13px;
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-  word-break: break-all;
+  line-height: 1.35;
+}
+
+.session-list__meta {
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.revision-row__title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.usage-meter__session-name {
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 /* Session control strip */

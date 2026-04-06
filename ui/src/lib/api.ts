@@ -6,6 +6,8 @@ export type SessionListItem = {
   duration_secs: number;
   accepted_captures: number;
   total_events_seen: number;
+  /** Present when the API returns it (from the app database). */
+  summary_title?: string | null;
 };
 
 export type SummaryRevision = {

@@ -9,6 +9,8 @@ pub struct SessionListItem {
     pub duration_secs: u64,
     pub accepted_captures: u64,
     pub total_events_seen: u64,
+    /// Current summary title from the app database, if the session has been opened or saved.
+    pub summary_title: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

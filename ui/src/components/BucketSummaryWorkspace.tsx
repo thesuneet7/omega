@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RevisionHistory } from "./RevisionHistory";
 import { encodeBucketStorage, type SessionBucket, type SummaryRevision } from "../lib/api";
+import { humanizeSummaryTitle } from "../lib/sessionDisplay";
 
 type Props = {
   sessionTitle: string;
@@ -91,8 +92,8 @@ export function BucketSummaryWorkspace({
     return (
       <>
         <section className="panel">
-          <h2 className="section-title">Summary</h2>
-          <p className="bucket-session-title">{sessionTitle}</p>
+          <h2 className="section-title">Session summary</h2>
+          <p className="bucket-session-title">{humanizeSummaryTitle(sessionTitle)}</p>
           <p className="muted bucket-hint">Open a card to read and edit. Your work saves automatically.</p>
           <div className="bucket-grid">
             {buckets.map((b, i) => (
@@ -117,7 +118,7 @@ export function BucketSummaryWorkspace({
     <section className="panel bucket-editor-panel">
       <div className="bucket-editor-toolbar">
         <button type="button" className="btn-ghost btn-small" onClick={handleBack}>
-          ← Back to summaries
+          ← Back to overview
         </button>
         <button type="button" disabled={saving} onClick={handleManualSave}>
           {saving ? "Saving…" : "Save revision"}
