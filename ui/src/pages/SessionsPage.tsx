@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BucketSummaryWorkspace } from "../components/BucketSummaryWorkspace";
 import { RevisionHistory } from "../components/RevisionHistory";
 import { SummaryEditor } from "../components/SummaryEditor";
+import { ApiUsageMeter } from "../components/ApiUsageMeter";
 import {
   endSession,
   getSessionSummary,
@@ -29,6 +30,7 @@ export function SessionsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
+  const [usageTick, setUsageTick] = useState(0);
 
   const refreshSessions = useCallback(async () => {
     setLoading(true);
@@ -37,6 +39,7 @@ export function SessionsPage() {
       setSessions(data);
       setSelected((prev) => prev ?? data[0] ?? null);
       setError(null);
+      setUsageTick((t) => t + 1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -110,6 +113,7 @@ export function SessionsPage() {
       setSessions(data);
       setSelected(data[0] ?? null);
       setSessionState("idle");
+      setUsageTick((t) => t + 1);
     } catch (e) {
       setError((e as Error).message);
       setSessionState("idle");
@@ -137,6 +141,7 @@ export function SessionsPage() {
         </div>
         {loading ? <p className="loading-hint">Loading sessions…</p> : null}
         {error ? <p className="error">{error}</p> : null}
+        <ApiUsageMeter sessionKey={selected?.session_key ?? null} refreshToken={usageTick} />
         <div className="list">
           {sessions.length === 0 && !loading ? (
             <p className="empty-hint">No sessions yet. End a capture run to see it here.</p>

@@ -48,6 +48,32 @@ export type PipelineRunRecord = {
   error_text?: string;
 };
 
+export type ApiUsageSnapshot = {
+  estimated_cost_usd_total: number;
+  monthly_limit_usd: number;
+  usage_percent_of_limit: number;
+  embedded_chars_total: number;
+  phase4_input_chars_total: number;
+  phase4_output_chars_total: number;
+  estimated_embed_tokens: number;
+  estimated_phase4_input_tokens: number;
+  estimated_phase4_output_tokens: number;
+  pricing_note: string;
+};
+
+export type SessionUsage = {
+  session_key: string;
+  estimated_cost_usd: number;
+  embedded_chars: number;
+  phase4_input_chars: number;
+  phase4_output_chars: number;
+};
+
+export type ApiUsageResponse = {
+  overall: ApiUsageSnapshot;
+  session: SessionUsage | null;
+};
+
 function apiBase(): string {
   if (typeof window !== "undefined" && window.omega?.apiBase) {
     return window.omega.apiBase;
@@ -118,4 +144,10 @@ export async function startSession(): Promise<{ status: string }> {
 
 export async function endSession(): Promise<{ summary: string }> {
   return apiPost("/api/session/end", {});
+}
+
+export async function getApiUsage(sessionKey?: string): Promise<ApiUsageResponse> {
+  const q = sessionKey ? new URLSearchParams({ session_key: sessionKey }) : "";
+  const suffix = q ? `?${q}` : "";
+  return apiGet(`/api/usage${suffix}`);
 }

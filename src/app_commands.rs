@@ -1,5 +1,6 @@
 use crate::app_db;
 use crate::app_models::{PipelineRunRecord, SessionBucket, SessionListItem, SessionSummaryState};
+use crate::usage;
 use crate::{phase2, phase3, phase4};
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -362,13 +363,21 @@ pub fn list_summary_revisions(session_key: String) -> Result<Vec<crate::app_mode
 }
 
 fn run_pipeline_stage_impl(stage: &str, input_ref: Option<String>) -> Result<()> {
+    let session_key = std::env::var("OMEGA_USAGE_SESSION_KEY").ok().or_else(|| {
+        input_ref
+            .as_ref()
+            .and_then(|p| usage::session_key_from_input_ref(p))
+    });
+    let sk = session_key.as_deref();
+
     match stage {
         "phase2" => {
             let cfg = phase2::IngestionConfig::from_env_and_args(
                 input_ref.map(PathBuf::from),
                 None,
             )?;
-            phase2::run_ingestion(cfg)?;
+            let (_path, summary) = phase2::run_ingestion(cfg)?;
+            usage::record_phase2(&summary, sk)?;
             Ok(())
         }
         "phase3" => {
@@ -378,7 +387,8 @@ fn run_pipeline_stage_impl(stage: &str, input_ref: Option<String>) -> Result<()>
         }
         "phase4" => {
             let cfg = phase4::SummarizeConfig::from_env_and_args(None, None, false, false)?;
-            phase4::run_summarization(cfg)?;
+            let (_path, summary) = phase4::run_summarization(cfg)?;
+            usage::record_phase4(&summary, sk)?;
             Ok(())
         }
         _ => anyhow::bail!("unknown stage '{stage}'"),
@@ -424,4 +434,8 @@ pub fn run_pipeline_stage(stage: String, input_ref: Option<String>) -> Result<Pi
 pub fn list_pipeline_runs(limit: Option<u32>) -> Result<Vec<PipelineRunRecord>, String> {
     let conn = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
     app_db::list_pipeline_runs(&conn, limit.unwrap_or(25) as usize).map_err(|e| e.to_string())
+}
+
+pub fn get_api_usage(session_key: Option<String>) -> Result<usage::ApiUsageResponse, String> {
+    usage::get_api_usage_response(session_key.as_deref()).map_err(|e| e.to_string())
 }

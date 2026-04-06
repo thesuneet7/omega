@@ -248,7 +248,7 @@ fn run_phase2_from_args(args: Vec<String>) -> anyhow::Result<()> {
     }
 
     let config = phase2::IngestionConfig::from_env_and_args(input_log, output_path)?;
-    let output_file = phase2::run_ingestion(config)?;
+    let (output_file, _) = phase2::run_ingestion(config)?;
     println!("Phase 2 ingestion completed: {}", output_file.display());
     Ok(())
 }
@@ -291,7 +291,7 @@ fn run_phase4_from_args(args: Vec<String>) -> anyhow::Result<()> {
     }
 
     let config = phase4::SummarizeConfig::from_env_and_args(db_path, output_path, force, dry_run)?;
-    let output_file = phase4::run_summarization(config)?;
+    let (output_file, _) = phase4::run_summarization(config)?;
     println!("Phase 4 summarization completed: {}", output_file.display());
     Ok(())
 }

@@ -7,3 +7,4 @@ pub mod phase3;
 pub mod phase4;
 pub mod phash;
 pub mod sensor;
+pub mod usage;

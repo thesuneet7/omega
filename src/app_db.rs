@@ -50,9 +50,35 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
   ended_at INTEGER,
   error_text TEXT
 );
+
+CREATE TABLE IF NOT EXISTS api_usage_totals (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  estimated_cost_usd REAL NOT NULL DEFAULT 0,
+  embedded_chars_total INTEGER NOT NULL DEFAULT 0,
+  phase4_input_chars_total INTEGER NOT NULL DEFAULT 0,
+  phase4_output_chars_total INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS api_usage_session (
+  session_key TEXT PRIMARY KEY,
+  estimated_cost_usd REAL NOT NULL DEFAULT 0,
+  embedded_chars INTEGER NOT NULL DEFAULT 0,
+  phase4_input_chars INTEGER NOT NULL DEFAULT 0,
+  phase4_output_chars INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
 "#,
     )
-    .context("failed to create app db schema")
+    .context("failed to create app db schema")?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO api_usage_totals (id, estimated_cost_usd, embedded_chars_total, phase4_input_chars_total, phase4_output_chars_total, updated_at)
+         VALUES (1, 0, 0, 0, 0, 0)",
+        [],
+    )
+    .context("seed api_usage_totals")?;
+    Ok(())
 }
 
 pub fn upsert_current_summary(

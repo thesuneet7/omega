@@ -8,6 +8,7 @@ use axum::{extract::State, Json, Router};
 use serde::Deserialize;
 use sensor_layer::app_commands;
 use sensor_layer::app_models::{PipelineRunRecord, SessionListItem, SessionSummaryState, SummaryRevision};
+use sensor_layer::usage::ApiUsageResponse;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -39,6 +40,12 @@ struct PipelineBody {
 struct RunsQuery {
     #[serde(default)]
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UsageQuery {
+    #[serde(default)]
+    session_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -211,6 +218,17 @@ async fn list_pipeline_runs(Query(q): Query<RunsQuery>) -> Result<Json<Vec<Pipel
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
+async fn get_usage(
+    Query(q): Query<UsageQuery>,
+) -> Result<Json<ApiUsageResponse>, (StatusCode, String)> {
+    let session_key = q.session_key.clone();
+    tokio::task::spawn_blocking(move || app_commands::get_api_usage(session_key))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("usage task join failed: {e}")))?
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 async fn fetch_summary(
     State(state): State<ApiState>,
 ) -> Result<Json<FetchSummaryResponse>, (StatusCode, String)> {
@@ -232,12 +250,23 @@ async fn fetch_summary(
 
     // Phase 2–4 use blocking I/O (`reqwest::blocking`, sqlite, etc.). Running that on the
     // async runtime worker triggers: "Cannot drop a runtime in a context where blocking is not allowed."
+    let session_key = latest_log
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
     let input_ref = latest_log.display().to_string();
     let pipeline_result = tokio::task::spawn_blocking(move || -> Result<String, String> {
-        app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
-        app_commands::run_pipeline_stage("phase3".to_string(), None)?;
-        app_commands::run_pipeline_stage("phase4".to_string(), None)?;
-        app_commands::load_generated_summary_text()
+        if let Some(ref sk) = session_key {
+            std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+        }
+        let r = (|| -> Result<String, String> {
+            app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
+            app_commands::run_pipeline_stage("phase3".to_string(), None)?;
+            app_commands::run_pipeline_stage("phase4".to_string(), None)?;
+            app_commands::load_generated_summary_text()
+        })();
+        let _ = std::env::remove_var("OMEGA_USAGE_SESSION_KEY");
+        r
     })
     .await
     .map_err(|e| {
@@ -283,12 +312,23 @@ async fn end_session(
             )
         })?;
 
+    let session_key = latest_log
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
     let input_ref = latest_log.display().to_string();
     let summary = tokio::task::spawn_blocking(move || -> Result<String, String> {
-        app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
-        app_commands::run_pipeline_stage("phase3".to_string(), None)?;
-        app_commands::run_pipeline_stage("phase4".to_string(), None)?;
-        app_commands::load_generated_summary_text()
+        if let Some(ref sk) = session_key {
+            std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+        }
+        let r = (|| -> Result<String, String> {
+            app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
+            app_commands::run_pipeline_stage("phase3".to_string(), None)?;
+            app_commands::run_pipeline_stage("phase4".to_string(), None)?;
+            app_commands::load_generated_summary_text()
+        })();
+        let _ = std::env::remove_var("OMEGA_USAGE_SESSION_KEY");
+        r
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("pipeline task join failed: {e}")))?
@@ -330,6 +370,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/summary-revisions", get(list_summary_revisions))
         .route("/api/pipeline/run", post(run_pipeline))
         .route("/api/pipeline/runs", get(list_pipeline_runs))
+        .route("/api/usage", get(get_usage))
         .route("/api/session/start", post(start_session))
         .route("/api/session/end", post(end_session))
         .route("/api/fetch-summary", post(fetch_summary))

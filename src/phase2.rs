@@ -25,6 +25,9 @@ pub struct IngestionSummary {
     pub items_read: usize,
     pub chunks_created: usize,
     pub chunks_embedded: usize,
+    /// Total UTF-8 characters embedded via the remote provider this run (new API calls only).
+    #[serde(default)]
+    pub embedded_input_chars: usize,
     pub chunks_reused_from_db: usize,
     pub embedding_backend: String,
     pub embedding_model: String,
@@ -397,7 +400,7 @@ impl EmbeddingProvider for HashProvider {
     }
 }
 
-pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
+pub fn run_ingestion(config: IngestionConfig) -> Result<(PathBuf, IngestionSummary)> {
     let source_log = match &config.input_log {
         Some(path) => path.clone(),
         None => latest_capture_log_path(Path::new("logs"))?,
@@ -413,6 +416,7 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
     init_schema(&db)?;
     let mut chunks_created = 0usize;
     let mut chunks_embedded = 0usize;
+    let mut embedded_input_chars = 0usize;
     let mut chunks_reused_from_db = 0usize;
     let mut output_chunks: Vec<IngestedChunkItem> = Vec::new();
 
@@ -448,6 +452,7 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
                 }
                 None => {
                     let vec = provider.embed(&chunk_text, EmbedTaskType::RetrievalDocument)?;
+                    embedded_input_chars += chunk_text.chars().count();
                     persist_embedding(
                         &db,
                         &chunk_hash,
@@ -490,6 +495,7 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
             items_read: session.payloads.len(),
             chunks_created,
             chunks_embedded,
+            embedded_input_chars,
             chunks_reused_from_db,
             embedding_backend: provider.backend_name().to_string(),
             embedding_model: provider.model_name().to_string(),
@@ -511,7 +517,7 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<PathBuf> {
         )
     })?;
 
-    Ok(output_path)
+    Ok((output_path, output.summary))
 }
 
 fn create_provider(config: &IngestionConfig) -> Result<Box<dyn EmbeddingProvider>> {

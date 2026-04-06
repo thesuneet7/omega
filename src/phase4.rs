@@ -124,6 +124,12 @@ pub struct Phase4Summary {
     pub summaries_written: usize,
     pub summaries_skipped_unchanged: usize,
     pub summaries_failed: usize,
+    /// Chars sent to the LLM (Gemini only; excludes dry-run and stub).
+    #[serde(default)]
+    pub llm_input_chars: usize,
+    /// Approximate response size (serialized summary JSON chars; Gemini only).
+    #[serde(default)]
+    pub llm_output_chars: usize,
     pub dry_run: bool,
     pub force: bool,
     pub max_input_chars: usize,
@@ -187,7 +193,7 @@ struct LlmJsonShape {
     caveats: Option<String>,
 }
 
-pub fn run_summarization(config: SummarizeConfig) -> Result<PathBuf> {
+pub fn run_summarization(config: SummarizeConfig) -> Result<(PathBuf, Phase4Summary)> {
     let gemini_key: Option<String> = match config.backend {
         SummarizeBackend::Gemini => Some(
             config
@@ -203,7 +209,7 @@ pub fn run_summarization(config: SummarizeConfig) -> Result<PathBuf> {
     run_summarization_inner(config, gemini_key)
 }
 
-fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) -> Result<PathBuf> {
+fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) -> Result<(PathBuf, Phase4Summary)> {
     let conn = Connection::open(&config.db_path)
         .with_context(|| format!("failed to open sqlite db '{}'", config.db_path.display()))?;
     init_phase4_schema(&conn)?;
@@ -214,6 +220,8 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
     let mut written = 0usize;
     let mut skipped = 0usize;
     let mut failed = 0usize;
+    let mut llm_input_chars = 0usize;
+    let mut llm_output_chars = 0usize;
 
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(120))
@@ -311,6 +319,12 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
 
         match result {
             Ok(record) => {
+                if matches!(config.backend, SummarizeBackend::Gemini) {
+                    llm_input_chars += user_prompt.chars().count();
+                    if let Ok(j) = serde_json::to_string(&record) {
+                        llm_output_chars += j.len();
+                    }
+                }
                 persist_summary(
                     &conn,
                     &record,
@@ -356,6 +370,8 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
             summaries_written: written,
             summaries_skipped_unchanged: skipped,
             summaries_failed: failed,
+            llm_input_chars,
+            llm_output_chars,
             dry_run: config.dry_run,
             force: config.force,
             max_input_chars: config.max_input_chars,
@@ -366,7 +382,7 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
     let json = serde_json::to_string_pretty(&output).context("failed to serialize phase4 output")?;
     fs::write(&out_path, json)
         .with_context(|| format!("failed to write phase4 output '{}'", out_path.display()))?;
-    Ok(out_path)
+    Ok((out_path, output.summary))
 }
 
 struct BucketRow {
