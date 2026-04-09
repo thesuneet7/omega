@@ -130,14 +130,14 @@ export function BucketSummaryWorkspace({
                 onClick={() => openBucket(i)}
               >
                 <span className="bucket-card__title">{b.title || "Untitled"}</span>
+                <span className="bucket-card__excerpt">
+                  {excerpt(bodyPreviewWithoutSourcesBlock(b.body)) || "No content yet."}
+                </span>
                 {b.source_attribution && b.source_attribution.length > 0 ? (
                   <span className="bucket-card__sources" title={b.source_attribution.map(formatSourceLabel).join("; ")}>
                     From: {formatSourcesForCard(b.source_attribution)}
                   </span>
                 ) : null}
-                <span className="bucket-card__excerpt">
-                  {excerpt(bodyPreviewWithoutSourcesBlock(b.body)) || "No content yet."}
-                </span>
               </button>
             ))}
           </div>

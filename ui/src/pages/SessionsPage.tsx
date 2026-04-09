@@ -168,12 +168,12 @@ export function SessionsPage() {
   return (
     <main className="layout">
       <aside className="panel panel--sidebar">
-        <div className="panel__header">
+        <div className="panel__header sidebar__header">
           <div className="brand">
             <span className="brand__name">Omega</span>
             <h2 className="brand__title">Your sessions</h2>
           </div>
-          <button type="button" className="btn-ghost btn-small" onClick={() => void refreshSessions()}>
+          <button type="button" className="btn-ghost btn-small sidebar__refresh" onClick={() => void refreshSessions()}>
             Refresh
           </button>
         </div>
@@ -230,9 +230,9 @@ export function SessionsPage() {
       </aside>
 
       <section className="content">
-        <section className="panel">
-          <div className="row row--top">
-            <div>
+        <section className="panel panel--recording">
+          <div className="recording-panel__row">
+            <div className="recording-panel__info">
               <h2 className="session-headline">Recording</h2>
               <div className="session-status-row">
                 <span
@@ -246,7 +246,7 @@ export function SessionsPage() {
                 onLiveStatus={handleLiveStatus}
               />
             </div>
-            <div className="row gap">
+            <div className="recording-actions" role="group" aria-label="Session controls">
               <button type="button" onClick={() => void handleStartSession()} disabled={sessionState !== "idle"}>
                 Start session
               </button>
