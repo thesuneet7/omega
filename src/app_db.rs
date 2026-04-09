@@ -14,6 +14,8 @@ pub fn now_epoch_secs() -> u64 {
 pub fn open_app_db(path: &Path) -> Result<Connection> {
     let conn = Connection::open(path)
         .with_context(|| format!("failed to open app db '{}'", path.display()))?;
+    conn.execute_batch("PRAGMA foreign_keys = ON;")
+        .context("enable sqlite foreign keys")?;
     init_schema(&conn)?;
     Ok(conn)
 }
@@ -216,6 +218,21 @@ pub fn finish_pipeline_run(
         params![status, now, error_text, run_id],
     )
     .context("update pipeline run status")?;
+    Ok(())
+}
+
+/// Remove saved summary, revisions (via FK cascade), and per-session usage for one capture session.
+pub fn delete_session_records(conn: &Connection, session_key: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM api_usage_session WHERE session_key = ?1",
+        params![session_key],
+    )
+    .context("delete api_usage_session row")?;
+    conn.execute(
+        "DELETE FROM session_summaries WHERE session_key = ?1",
+        params![session_key],
+    )
+    .context("delete session_summaries row")?;
     Ok(())
 }
 

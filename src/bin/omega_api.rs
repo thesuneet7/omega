@@ -3,11 +3,15 @@
 
 use axum::extract::Query;
 use axum::http::StatusCode;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{extract::State, Json, Router};
 use serde::Deserialize;
 use sensor_layer::app_commands;
-use sensor_layer::app_models::{PipelineRunRecord, SessionListItem, SessionSummaryState, SummaryRevision};
+use sensor_layer::app_models::{
+    CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord, SessionListItem,
+    SessionSummaryState, StorageManifest, SummaryRevision,
+};
+use sensor_layer::capture_live_status::Phase1LiveStatus;
 use sensor_layer::usage::ApiUsageResponse;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -46,6 +50,22 @@ struct RunsQuery {
 struct UsageQuery {
     #[serde(default)]
     session_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapturePauseBody {
+    paused: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteAllLocalBody {
+    confirm: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteSessionBody {
+    #[serde(rename = "sessionKey")]
+    session_key: String,
 }
 
 #[derive(Clone)]
@@ -218,6 +238,85 @@ async fn list_pipeline_runs(Query(q): Query<RunsQuery>) -> Result<Json<Vec<Pipel
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
+async fn get_phase1_live_status() -> Result<Json<Phase1LiveStatus>, (StatusCode, String)> {
+    app_commands::get_phase1_live_status()
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn put_capture_pause(
+    Json(body): Json<CapturePauseBody>,
+) -> Result<Json<Phase1LiveStatus>, (StatusCode, String)> {
+    app_commands::set_capture_paused(body.paused)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn get_capture_exclusions() -> Result<Json<CaptureExclusionsState>, (StatusCode, String)> {
+    app_commands::get_capture_exclusions()
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn put_capture_exclusions(
+    Json(body): Json<CaptureExclusionsState>,
+) -> Result<Json<CaptureExclusionsState>, (StatusCode, String)> {
+    app_commands::set_capture_exclusions(body.excluded_app_names)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn storage_manifest() -> Result<Json<StorageManifest>, (StatusCode, String)> {
+    app_commands::get_storage_manifest()
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn delete_session_privacy_impl(
+    session_key: String,
+) -> Result<Json<DeleteLocalDataResponse>, (StatusCode, String)> {
+    tokio::task::spawn_blocking(move || app_commands::delete_session_data(session_key))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| {
+            let code = if e.contains("invalid") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (code, e)
+        })
+}
+
+async fn delete_privacy_session(
+    Query(q): Query<SessionKeyQuery>,
+) -> Result<Json<DeleteLocalDataResponse>, (StatusCode, String)> {
+    delete_session_privacy_impl(q.session_key).await
+}
+
+async fn post_delete_session(
+    Json(body): Json<DeleteSessionBody>,
+) -> Result<Json<DeleteLocalDataResponse>, (StatusCode, String)> {
+    delete_session_privacy_impl(body.session_key).await
+}
+
+async fn post_delete_all_local(
+    Json(body): Json<DeleteAllLocalBody>,
+) -> Result<Json<DeleteLocalDataResponse>, (StatusCode, String)> {
+    if !body.confirm {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Set confirm to true to erase all local session data.".to_string(),
+        ));
+    }
+    tokio::task::spawn_blocking(app_commands::delete_all_local_session_data)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 async fn get_usage(
     Query(q): Query<UsageQuery>,
 ) -> Result<Json<ApiUsageResponse>, (StatusCode, String)> {
@@ -289,6 +388,7 @@ async fn fetch_summary(
 async fn start_session(
     State(state): State<ApiState>,
 ) -> Result<Json<SessionStatusResponse>, (StatusCode, String)> {
+    app_commands::reset_phase1_live_status().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let mut phase1 = lock_phase1(&state.phase1);
     ensure_phase1_running(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(SessionStatusResponse { status: "running" }))
@@ -301,6 +401,7 @@ async fn end_session(
         let mut phase1 = lock_phase1(&state.phase1);
         stop_phase1_capture(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     }
+    let _ = app_commands::reset_phase1_live_status();
 
     let latest_log = latest_runtime_capture_log(state.runtime_start_epoch_secs)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
@@ -371,6 +472,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/pipeline/run", post(run_pipeline))
         .route("/api/pipeline/runs", get(list_pipeline_runs))
         .route("/api/usage", get(get_usage))
+        .route("/api/capture/live-status", get(get_phase1_live_status))
+        .route("/api/capture/pause", put(put_capture_pause))
+        .route("/api/privacy/capture-exclusions", get(get_capture_exclusions))
+        .route("/api/privacy/capture-exclusions", put(put_capture_exclusions))
+        .route("/api/privacy/storage-manifest", get(storage_manifest))
+        .route("/api/privacy/session-data", delete(delete_privacy_session))
+        .route("/api/privacy/delete-session", post(post_delete_session))
+        .route("/api/privacy/delete-all-local", post(post_delete_all_local))
         .route("/api/session/start", post(start_session))
         .route("/api/session/end", post(end_session))
         .route("/api/fetch-summary", post(fetch_summary))

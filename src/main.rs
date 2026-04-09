@@ -2,7 +2,9 @@ mod models;
 mod phase2;
 mod phase3;
 mod phase4;
+mod capture_live_status;
 mod phash;
+mod privacy_config;
 mod sensor;
 
 use crossbeam_channel::{unbounded, Receiver};
@@ -27,6 +29,8 @@ struct SessionSummary {
     accepted_captures: u64,
     dropped_by_phash: u64,
     dropped_by_throttle: u64,
+    dropped_by_exclusion: u64,
+    dropped_by_pause: u64,
     per_event_counts: BTreeMap<String, u64>,
     saved_payload_count: usize,
 }
@@ -202,6 +206,8 @@ fn run_capture() {
             accepted_captures: stats.accepted_captures,
             dropped_by_phash: stats.dropped_by_phash,
             dropped_by_throttle: stats.dropped_by_throttle,
+            dropped_by_exclusion: stats.dropped_by_exclusion,
+            dropped_by_pause: stats.dropped_by_pause,
             per_event_counts,
             saved_payload_count: all_payloads.len(),
         },

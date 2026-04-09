@@ -19,10 +19,17 @@ export type SummaryRevision = {
   editor_label: string;
 };
 
+export type SourceAttribution = {
+  app_name: string;
+  window_title: string;
+};
+
 export type SessionBucket = {
   bucket_id: number;
   title: string;
   body: string;
+  /** Distinct app + window titles from capture metadata (Phase 4 / backfill). */
+  source_attribution?: SourceAttribution[];
 };
 
 export type SessionSummaryState = {
@@ -76,6 +83,37 @@ export type ApiUsageResponse = {
   session: SessionUsage | null;
 };
 
+export type CaptureExclusionsState = {
+  excludedAppNames: string[];
+};
+
+export type Phase1LiveStatus = {
+  /** Distinct apps that caused at least one exclusion block this session (cleared when session starts/ends). */
+  blockedAppNames: string[];
+  /** Privacy pause: sensor skips all captures while true. */
+  capturePaused?: boolean;
+};
+
+export type StorageManifestEntry = {
+  category: string;
+  path: string;
+  absolutePath: string;
+  bytes: number;
+};
+
+export type StorageManifest = {
+  logsRootAbsolute: string;
+  retentionNote: string;
+  entries: StorageManifestEntry[];
+  totalBytes: number;
+};
+
+export type DeleteLocalDataResponse = {
+  ok: boolean;
+  restartRecommended: boolean;
+  message: string;
+};
+
 function apiBase(): string {
   if (typeof window !== "undefined" && window.omega?.apiBase) {
     return window.omega.apiBase;
@@ -95,6 +133,19 @@ async function apiGet<T>(path: string): Promise<T> {
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(`${apiBase()}${path}`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t || r.statusText);
+  }
+  return r.json() as Promise<T>;
+}
+
+async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${apiBase()}${path}`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -152,4 +203,33 @@ export async function getApiUsage(sessionKey?: string): Promise<ApiUsageResponse
   const q = sessionKey ? new URLSearchParams({ session_key: sessionKey }) : "";
   const suffix = q ? `?${q}` : "";
   return apiGet(`/api/usage${suffix}`);
+}
+
+export async function getCaptureExclusions(): Promise<CaptureExclusionsState> {
+  return apiGet("/api/privacy/capture-exclusions");
+}
+
+export async function setCaptureExclusions(excludedAppNames: string[]): Promise<CaptureExclusionsState> {
+  return apiPut("/api/privacy/capture-exclusions", { excludedAppNames });
+}
+
+export async function getPhase1LiveStatus(): Promise<Phase1LiveStatus> {
+  return apiGet("/api/capture/live-status");
+}
+
+export async function setCapturePaused(paused: boolean): Promise<Phase1LiveStatus> {
+  return apiPut("/api/capture/pause", { paused });
+}
+
+export async function getStorageManifest(): Promise<StorageManifest> {
+  return apiGet("/api/privacy/storage-manifest");
+}
+
+export async function deleteSessionData(sessionKey: string): Promise<DeleteLocalDataResponse> {
+  // POST avoids DELETE + CORS/preflight quirks in some embedded browsers.
+  return apiPost("/api/privacy/delete-session", { sessionKey });
+}
+
+export async function deleteAllLocalSessionData(): Promise<DeleteLocalDataResponse> {
+  return apiPost("/api/privacy/delete-all-local", { confirm: true });
 }

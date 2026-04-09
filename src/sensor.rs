@@ -1,5 +1,7 @@
+use crate::capture_live_status;
 use crate::models::{Phase1Payload, VisualLogItem};
 use crate::phash::{compute_phash, similarity};
+use crate::privacy_config;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use screenshots::Screen;
 use std::fs;
@@ -32,6 +34,11 @@ pub struct SensorEngine {
     scroll_idle_delay: Duration,
     #[cfg(target_os = "macos")]
     vision_helper_binary: Option<PathBuf>,
+    /// Lowercase app names from `capture_exclusions.json` (refreshed when the file changes).
+    cached_excluded_app_names: Vec<String>,
+    exclusion_file_mtime: Option<std::time::SystemTime>,
+    dropped_by_exclusion: u64,
+    dropped_by_pause: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +47,8 @@ pub struct SensorStats {
     pub accepted_captures: u64,
     pub dropped_by_phash: u64,
     pub dropped_by_throttle: u64,
+    pub dropped_by_exclusion: u64,
+    pub dropped_by_pause: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +56,8 @@ enum CaptureAttempt {
     Accepted,
     DroppedPhash,
     DroppedThrottle,
+    DroppedExclusion,
+    DroppedPause,
     Failed,
 }
 
@@ -71,6 +82,10 @@ impl SensorEngine {
             scroll_idle_delay: Duration::from_millis(500),
             #[cfg(target_os = "macos")]
             vision_helper_binary,
+            cached_excluded_app_names: Vec::new(),
+            exclusion_file_mtime: None,
+            dropped_by_exclusion: 0,
+            dropped_by_pause: 0,
         }
     }
 
@@ -124,7 +139,13 @@ impl SensorEngine {
 
         // Try to capture once. If throttled, keep pending so it will be retried.
         let attempt = self.try_capture("ScrollStopped");
-        if attempt == CaptureAttempt::Accepted || attempt == CaptureAttempt::DroppedPhash {
+        if matches!(
+            attempt,
+            CaptureAttempt::Accepted
+                | CaptureAttempt::DroppedPhash
+                | CaptureAttempt::DroppedExclusion
+                | CaptureAttempt::DroppedPause
+        ) {
             self.scroll_pending = false;
             self.last_scroll_instant = None;
         }
@@ -164,7 +185,51 @@ impl SensorEngine {
         Ok(DynamicImage::ImageRgba8(img_buf))
     }
 
+    fn refresh_exclusion_cache(&mut self) {
+        let path = privacy_config::exclusions_path();
+        if !path.exists() {
+            if self.exclusion_file_mtime.is_some() || !self.cached_excluded_app_names.is_empty() {
+                self.cached_excluded_app_names.clear();
+                self.exclusion_file_mtime = None;
+            }
+            return;
+        }
+        let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+        if mtime == self.exclusion_file_mtime && self.exclusion_file_mtime.is_some() {
+            return;
+        }
+        match privacy_config::load_capture_exclusions() {
+            Ok(cfg) => {
+                self.cached_excluded_app_names = cfg
+                    .excluded_app_names
+                    .iter()
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                self.exclusion_file_mtime = mtime;
+            }
+            Err(e) => {
+                eprintln!("omega: could not load capture exclusions: {e}");
+            }
+        }
+    }
+
     fn try_capture(&mut self, event_type: &str) -> CaptureAttempt {
+        self.refresh_exclusion_cache();
+        if capture_live_status::read_or_default()
+            .map(|s| s.capture_paused)
+            .unwrap_or(false)
+        {
+            self.dropped_by_pause += 1;
+            return CaptureAttempt::DroppedPause;
+        }
+        let (app_name, window_title) = self.get_active_app_and_window();
+        if privacy_config::is_app_excluded(&app_name, &self.cached_excluded_app_names) {
+            self.dropped_by_exclusion += 1;
+            capture_live_status::record_exclusion_block(&app_name);
+            return CaptureAttempt::DroppedExclusion;
+        }
+
         // Coalesce/throttle expensive capture work.
         let now = Instant::now();
         if let Some(last) = self.last_capture_instant {
@@ -193,8 +258,6 @@ impl SensorEngine {
             }
         }
         self.last_phash = Some(phash);
-
-        let (app_name, window_title) = self.get_active_app_and_window();
 
         let (w, h) = screenshot.dimensions();
         let (ocr_engine_used, ocr_text) = self.extract_ocr_text_with_engine(&screenshot);
@@ -420,6 +483,8 @@ do {
             accepted_captures: self.accepted_captures,
             dropped_by_phash: self.dropped_by_phash,
             dropped_by_throttle: self.dropped_by_throttle,
+            dropped_by_exclusion: self.dropped_by_exclusion,
+            dropped_by_pause: self.dropped_by_pause,
         }
     }
 }

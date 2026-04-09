@@ -13,7 +13,14 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Bump when the prompt or output schema changes materially (stored in DB + JSON artifact).
-pub const PROMPT_VERSION: &str = "phase4-v1";
+pub const PROMPT_VERSION: &str = "phase4-v2";
+
+/// Capture metadata pair stored on bucket summaries (same JSON shape as `app_models::SourceAttribution`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BucketSourceRef {
+    pub app_name: String,
+    pub window_title: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct SummarizeConfig {
@@ -141,6 +148,9 @@ pub struct BucketSummaryRecord {
     pub title: String,
     pub one_liner: String,
     pub detailed_summary: String,
+    /// Distinct app + window title pairs from capture metadata (not inferred by the LLM).
+    #[serde(default)]
+    pub source_attribution: Vec<BucketSourceRef>,
     pub primary_apps: Vec<String>,
     pub tags: Vec<String>,
     pub confidence_0_1: f32,
@@ -267,6 +277,7 @@ fn run_summarization_inner(config: SummarizeConfig, gemini_key: Option<String>) 
                 title: format!("[dry-run] bucket {}", bucket.bucket_id),
                 one_liner: "dry run — no LLM call".to_string(),
                 detailed_summary: String::new(),
+                source_attribution: agg.source_attribution.clone(),
                 primary_apps: agg.distinct_apps.clone(),
                 tags: vec!["dry-run".to_string()],
                 confidence_0_1: 0.0,
@@ -392,9 +403,35 @@ struct BucketRow {
 struct AggregatedBucket {
     chunk_hashes: Vec<String>,
     distinct_apps: Vec<String>,
+    source_attribution: Vec<BucketSourceRef>,
     prompt_body: String,
     first_seen_epoch_secs: Option<u64>,
     last_seen_epoch_secs: Option<u64>,
+}
+
+/// Distinct (app, window title) pairs for chunks assigned to this bucket (capture metadata).
+/// Called from `app_commands` in the API crate; the `sensor_layer` capture binary also compiles `phase4` without that module.
+#[allow(dead_code)]
+pub fn bucket_source_attribution(conn: &Connection, bucket_id: i64) -> Result<Vec<BucketSourceRef>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT cap.app_name, cap.window_title
+           FROM task_bucket_items tbi
+           JOIN chunks c ON c.chunk_hash = tbi.chunk_hash
+           JOIN captures cap ON cap.canonical_hash = c.canonical_hash
+           WHERE tbi.bucket_id = ?1"#,
+    )?;
+    let rows = stmt.query_map(params![bucket_id], |row| {
+        Ok(BucketSourceRef {
+            app_name: row.get(0)?,
+            window_title: row.get(1)?,
+        })
+    })?;
+    let mut set: std::collections::BTreeSet<BucketSourceRef> =
+        std::collections::BTreeSet::new();
+    for r in rows {
+        set.insert(r.context("source attribution row")?);
+    }
+    Ok(set.into_iter().collect())
 }
 
 fn list_buckets(conn: &Connection) -> Result<Vec<BucketRow>> {
@@ -444,6 +481,8 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
 
     let mut parts: Vec<String> = Vec::new();
     let mut apps: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut source_keys: std::collections::BTreeSet<BucketSourceRef> =
+        std::collections::BTreeSet::new();
     let mut ts_min: Option<i64> = None;
     let mut ts_max: Option<i64> = None;
 
@@ -456,13 +495,20 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
             "### segment (app={app}, window={window}, ts={ts})\n{}",
             text.trim()
         ));
+        source_keys.insert(BucketSourceRef {
+            app_name: app,
+            window_title: window,
+        });
     }
 
     let prompt_body = parts.join("\n\n");
-    let distinct_apps: Vec<String> = apps.into_iter().collect();
+    let mut distinct_apps: Vec<String> = apps.into_iter().collect();
+    distinct_apps.sort_unstable();
+    let source_attribution: Vec<BucketSourceRef> = source_keys.into_iter().collect();
     Ok(AggregatedBucket {
         chunk_hashes,
         distinct_apps,
+        source_attribution,
         prompt_body,
         first_seen_epoch_secs: ts_min.map(|t| t as u64),
         last_seen_epoch_secs: ts_max.map(|t| t as u64),
@@ -491,6 +537,24 @@ fn build_prompt_body(agg: &AggregatedBucket, max_chars: usize) -> (String, bool)
 
 fn build_user_prompt(agg: &AggregatedBucket, body: &str, truncated: bool) -> String {
     let apps = agg.distinct_apps.join(", ");
+    let windows_preview: String = agg
+        .source_attribution
+        .iter()
+        .map(|s| {
+            let w = s.window_title.trim();
+            if w.is_empty() {
+                s.app_name.clone()
+            } else {
+                format!("{} — {}", s.app_name, w)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let windows_preview = if windows_preview.is_empty() {
+        "none".to_string()
+    } else {
+        windows_preview
+    };
     let tw = match (agg.first_seen_epoch_secs, agg.last_seen_epoch_secs) {
         (Some(a), Some(b)) => format!("time range (epoch seconds, inclusive): {a} .. {b}"),
         _ => "time range: unknown".to_string(),
@@ -500,6 +564,7 @@ fn build_user_prompt(agg: &AggregatedBucket, body: &str, truncated: bool) -> Str
 
 {tw}
 Apps seen in this bucket: {apps}
+Distinct windows/titles (from capture metadata; use only to understand context — do not invent additional titles): {windows_preview}
 Segments truncated for model limits: {trunc}
 
 OCR segments (chronological):
@@ -520,12 +585,13 @@ Respond with a single JSON object ONLY (no markdown fences), keys:
 - "one_liner": exactly one sentence, second person ("you ..."), capturing the main focus of what you were reading or doing in this bucket
 - "detailed_summary": 1-3 short sentences in second person that frame the bucket (optional if key_points already cover context)
 - "key_points": array of strings; each string is ONE atomic takeaway (no leading "- "). Order should follow the OCR when possible. Aim to list every important claim, step, metric, and example—err on the side of too many points rather than merging distinct ideas into one vague line. Typical buckets need many entries (often 15-40+ when the source is long); short pages need fewer.
-- "primary_apps": array of app names most relevant (subset of seen apps)
+- "primary_apps": array of app names most relevant (subset of seen apps only)
 - "tags": 3-8 lowercase snake_case tags
 - "confidence_0_1": number 0-1 how confident you are
 - "caveats": optional string if OCR was noisy, duplicated, or ambiguous"#,
         tw = tw,
         apps = apps,
+        windows_preview = windows_preview,
         trunc = truncated,
         body = body
     )
@@ -767,6 +833,7 @@ fn llm_to_record(
         title: j.title.unwrap_or_else(|| "Untitled task".to_string()),
         one_liner: j.one_liner.unwrap_or_default(),
         detailed_summary,
+        source_attribution: agg.source_attribution.clone(),
         primary_apps: j.primary_apps.unwrap_or_default(),
         tags: j.tags.unwrap_or_default(),
         confidence_0_1: j.confidence_0_1.unwrap_or(0.5).clamp(0.0, 1.0),
@@ -800,6 +867,7 @@ fn stub_summary(
         detailed_summary: format!(
             "This is a deterministic offline summary. Content preview: {preview}..."
         ),
+        source_attribution: agg.source_attribution.clone(),
         primary_apps: agg.distinct_apps.clone(),
         tags: vec!["stub".to_string(), "offline".to_string()],
         confidence_0_1: 0.1,

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { NotionLikeMarkdownEditor } from "./NotionLikeMarkdownEditor";
 import { RevisionHistory } from "./RevisionHistory";
-import { encodeBucketStorage, type SessionBucket, type SummaryRevision } from "../lib/api";
+import {
+  encodeBucketStorage,
+  type SessionBucket,
+  type SourceAttribution,
+  type SummaryRevision,
+} from "../lib/api";
 import { humanizeSummaryTitle } from "../lib/sessionDisplay";
 
 type Props = {
@@ -12,10 +18,30 @@ type Props = {
   onRestore: (rev: SummaryRevision) => void;
 };
 
+function bodyPreviewWithoutSourcesBlock(body: string): string {
+  const marker = "**Sources (from capture metadata):**";
+  const idx = body.indexOf(marker);
+  if (idx < 0) return body;
+  return body.slice(0, idx).trimEnd();
+}
+
 function excerpt(text: string, max = 140): string {
   const t = text.trim().replace(/\s+/g, " ");
   if (t.length <= max) return t;
   return `${t.slice(0, max)}…`;
+}
+
+function formatSourceLabel(s: SourceAttribution): string {
+  const w = s.window_title.trim();
+  if (!w) return s.app_name;
+  return `${s.app_name} — ${w}`;
+}
+
+function formatSourcesForCard(sources: SourceAttribution[] | undefined, max = 120): string {
+  if (!sources?.length) return "";
+  const line = sources.map(formatSourceLabel).join("; ");
+  if (line.length <= max) return line;
+  return `${line.slice(0, max)}…`;
 }
 
 export function BucketSummaryWorkspace({
@@ -104,7 +130,14 @@ export function BucketSummaryWorkspace({
                 onClick={() => openBucket(i)}
               >
                 <span className="bucket-card__title">{b.title || "Untitled"}</span>
-                <span className="bucket-card__excerpt">{excerpt(b.body) || "No content yet."}</span>
+                {b.source_attribution && b.source_attribution.length > 0 ? (
+                  <span className="bucket-card__sources" title={b.source_attribution.map(formatSourceLabel).join("; ")}>
+                    From: {formatSourcesForCard(b.source_attribution)}
+                  </span>
+                ) : null}
+                <span className="bucket-card__excerpt">
+                  {excerpt(bodyPreviewWithoutSourcesBlock(b.body)) || "No content yet."}
+                </span>
               </button>
             ))}
           </div>
@@ -113,6 +146,9 @@ export function BucketSummaryWorkspace({
       </>
     );
   }
+
+  const activeBucket = buckets[activeIndex];
+  const activeSources = activeBucket?.source_attribution;
 
   return (
     <section className="panel bucket-editor-panel">
@@ -134,16 +170,26 @@ export function BucketSummaryWorkspace({
         placeholder="Title"
         aria-label="Bucket title"
       />
-      <textarea
-        className="editor-body"
-        value={bb}
-        onChange={(e) => {
-          setBb(e.target.value);
+      {activeSources && activeSources.length > 0 ? (
+        <div className="bucket-sources-readonly" aria-label="Capture sources for this summary">
+          <div className="bucket-sources-readonly__label">Sources (from capture metadata)</div>
+          <ul className="bucket-sources-readonly__list">
+            {activeSources.map((s, j) => (
+              <li key={`${s.app_name}-${s.window_title}-${j}`}>{formatSourceLabel(s)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <NotionLikeMarkdownEditor
+        className="editor-body-notion"
+        markdown={bb}
+        onMarkdownChange={(md) => {
+          setBb(md);
           setDirty(true);
         }}
-        rows={18}
-        placeholder="Summary for this theme…"
+        placeholder="Summary for this theme… Type / for blocks."
         aria-label="Bucket body"
+        documentTitle={bt || activeBucket?.title || "Bucket summary"}
       />
     </section>
   );

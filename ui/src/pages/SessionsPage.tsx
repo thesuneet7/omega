@@ -3,21 +3,39 @@ import { BucketSummaryWorkspace } from "../components/BucketSummaryWorkspace";
 import { RevisionHistory } from "../components/RevisionHistory";
 import { SummaryEditor } from "../components/SummaryEditor";
 import { ApiUsageMeter } from "../components/ApiUsageMeter";
+import { CaptureLiveStatusBanner } from "../components/CaptureLiveStatusBanner";
+import { DataManifestPanel } from "../components/DataManifestPanel";
+import { ExcludedAppsPanel } from "../components/ExcludedAppsPanel";
 import {
   endSession,
   getSessionSummary,
   listSessions,
   saveSummaryRevision,
+  setCapturePaused as persistCapturePause,
   startSession,
+  type Phase1LiveStatus,
   type SessionListItem,
   type SessionSummaryState,
   type SummaryRevision,
 } from "../lib/api";
 import { sessionListPrimaryLine, sessionListSecondaryLine } from "../lib/sessionDisplay";
 
+/** After refresh, keep the same session if it still exists; otherwise fall back to the first row. */
+function resolveSelectedSession(
+  prev: SessionListItem | null,
+  sessions: SessionListItem[]
+): SessionListItem | null {
+  if (prev) {
+    const stillThere = sessions.find((s) => s.session_key === prev.session_key);
+    if (stillThere) return stillThere;
+  }
+  return sessions[0] ?? null;
+}
+
 type SessionState = "capturing" | "processing" | "idle";
 
-function statusDotClass(state: SessionState): string {
+function statusDotClass(state: SessionState, privacyPaused: boolean): string {
+  if (state === "capturing" && privacyPaused) return "status-dot status-dot--paused";
   if (state === "capturing") return "status-dot status-dot--capturing";
   if (state === "processing") return "status-dot status-dot--processing";
   return "status-dot status-dot--idle";
@@ -31,6 +49,7 @@ export function SessionsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
+  const [privacyPaused, setPrivacyPaused] = useState(false);
   const [usageTick, setUsageTick] = useState(0);
 
   const refreshSessions = useCallback(async () => {
@@ -38,7 +57,7 @@ export function SessionsPage() {
     try {
       const data = await listSessions();
       setSessions(data);
-      setSelected((prev) => prev ?? data[0] ?? null);
+      setSelected((prev) => resolveSelectedSession(prev, data));
       setError(null);
       setUsageTick((t) => t + 1);
     } catch (e) {
@@ -99,7 +118,22 @@ export function SessionsPage() {
     setError(null);
     try {
       await startSession();
+      setPrivacyPaused(false);
       setSessionState("capturing");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
+  const handleLiveStatus = useCallback((live: Phase1LiveStatus | null) => {
+    setPrivacyPaused(live?.capturePaused === true);
+  }, []);
+
+  const applyCapturePause = useCallback(async (paused: boolean) => {
+    setError(null);
+    try {
+      const s = await persistCapturePause(paused);
+      setPrivacyPaused(!!s.capturePaused);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -112,7 +146,8 @@ export function SessionsPage() {
       await endSession();
       const data = await listSessions();
       setSessions(data);
-      setSelected(data[0] ?? null);
+      setSelected((prev) => resolveSelectedSession(prev, data));
+      setPrivacyPaused(false);
       setSessionState("idle");
       setUsageTick((t) => t + 1);
     } catch (e) {
@@ -123,7 +158,9 @@ export function SessionsPage() {
 
   const statusMessage =
     sessionState === "capturing"
-      ? "Capture is on — your activity is being recorded."
+      ? privacyPaused
+        ? "Privacy pause — capture is off until you resume (tray or ⌘⇧9 in the desktop app)."
+        : "Capture is on — your activity is being recorded."
       : sessionState === "processing"
         ? "Wrapping up: ingesting, stitching, and summarizing…"
         : "Idle — start a session when you’re ready to capture again.";
@@ -142,41 +179,53 @@ export function SessionsPage() {
         </div>
         {loading ? <p className="loading-hint">Loading sessions…</p> : null}
         {error ? <p className="error">{error}</p> : null}
-        <ApiUsageMeter
-          sessionKey={selected?.session_key ?? null}
-          sessionLabel={
-            selected
-              ? sessionListPrimaryLine(selected, {
-                  selectedSessionKey: selected.session_key,
-                  currentSummaryTitle: summary?.title ?? null,
-                })
-              : null
-          }
-          refreshToken={usageTick}
-        />
-        <div className="list">
-          {sessions.length === 0 && !loading ? (
-            <p className="empty-hint">No sessions yet. End a capture run to see it here.</p>
-          ) : null}
-          {sessions.map((s) => {
-            const primary = sessionListPrimaryLine(s, {
-              selectedSessionKey: selected?.session_key ?? null,
-              currentSummaryTitle: summary?.title ?? null,
-            });
-            return (
-              <button
-                type="button"
-                key={s.session_key}
-                className={`list-item buttonish ${selected?.session_key === s.session_key ? "active" : ""}`}
-                onClick={() => setSelected(s)}
-              >
-                <div>
-                  <span className="session-list__primary">{primary}</span>
-                  <div className="muted session-list__meta">{sessionListSecondaryLine(s, primary)}</div>
-                </div>
-              </button>
-            );
-          })}
+
+        <div className="sidebar__sessions">
+          <h3 className="sidebar__section-title">Sessions</h3>
+          <div className="list list--sessions">
+            {sessions.length === 0 && !loading ? (
+              <p className="empty-hint">No sessions yet. End a capture run to see it here.</p>
+            ) : null}
+            {sessions.map((s) => {
+              const primary = sessionListPrimaryLine(s, {
+                selectedSessionKey: selected?.session_key ?? null,
+                currentSummaryTitle: summary?.title ?? null,
+              });
+              return (
+                <button
+                  type="button"
+                  key={s.session_key}
+                  className={`list-item buttonish ${selected?.session_key === s.session_key ? "active" : ""}`}
+                  onClick={() => setSelected(s)}
+                >
+                  <div>
+                    <span className="session-list__primary">{primary}</span>
+                    <div className="muted session-list__meta">{sessionListSecondaryLine(s, primary)}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="sidebar__footer">
+          <ApiUsageMeter
+            sessionKey={selected?.session_key ?? null}
+            sessionLabel={
+              selected
+                ? sessionListPrimaryLine(selected, {
+                    selectedSessionKey: selected.session_key,
+                    currentSummaryTitle: summary?.title ?? null,
+                  })
+                : null
+            }
+            refreshToken={usageTick}
+          />
+          <ExcludedAppsPanel />
+          <DataManifestPanel
+            selectedSessionKey={selected?.session_key ?? null}
+            onDataChanged={() => void refreshSessions()}
+          />
         </div>
       </aside>
 
@@ -186,17 +235,36 @@ export function SessionsPage() {
             <div>
               <h2 className="session-headline">Recording</h2>
               <div className="session-status-row">
-                <span className={statusDotClass(sessionState)} aria-hidden />
+                <span
+                  className={statusDotClass(sessionState, privacyPaused)}
+                  aria-hidden
+                />
                 <p className="status-text">{statusMessage}</p>
               </div>
+              <CaptureLiveStatusBanner
+                active={sessionState === "capturing"}
+                onLiveStatus={handleLiveStatus}
+              />
             </div>
             <div className="row gap">
               <button type="button" onClick={() => void handleStartSession()} disabled={sessionState !== "idle"}>
                 Start session
               </button>
+              {sessionState === "capturing" && !privacyPaused ? (
+                <button type="button" onClick={() => void applyCapturePause(true)}>
+                  Pause capture
+                </button>
+              ) : null}
+              {sessionState === "capturing" && privacyPaused ? (
+                <button type="button" className="primary-button" onClick={() => void applyCapturePause(false)}>
+                  Resume capture
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="primary-button"
+                className={
+                  sessionState === "capturing" && !privacyPaused ? "primary-button" : undefined
+                }
                 onClick={() => void handleEndSession()}
                 disabled={sessionState !== "capturing"}
               >

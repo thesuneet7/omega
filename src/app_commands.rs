@@ -1,5 +1,10 @@
 use crate::app_db;
-use crate::app_models::{PipelineRunRecord, SessionBucket, SessionListItem, SessionSummaryState};
+use crate::app_models::{
+    CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord, SessionBucket,
+    SessionListItem, SessionSummaryState, SourceAttribution, StorageManifest, StorageManifestEntry,
+};
+use crate::capture_live_status::Phase1LiveStatus;
+use crate::privacy_config;
 use crate::usage;
 use crate::{phase2, phase3, phase4};
 use anyhow::{Context, Result};
@@ -48,6 +53,7 @@ fn parse_legacy_bucket_markdown(body: &str) -> Option<Vec<SessionBucket>> {
             bucket_id: *id,
             title: title.clone(),
             body: body_text,
+            source_attribution: Vec::new(),
         });
     }
     Some(out)
@@ -72,6 +78,9 @@ struct CaptureSessionSummary {
     session_duration_secs: u64,
     total_events_seen: u64,
     accepted_captures: u64,
+    #[serde(default)]
+    #[allow(dead_code)]
+    dropped_by_pause: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,10 +88,163 @@ struct CaptureSessionFile {
     session_summary: CaptureSessionSummary,
 }
 
+fn format_sources_markdown(sources: &[SourceAttribution]) -> String {
+    if sources.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = sources
+        .iter()
+        .map(|s| {
+            let w = s.window_title.trim();
+            if w.is_empty() {
+                s.app_name.clone()
+            } else {
+                format!("{} — {}", s.app_name, w)
+            }
+        })
+        .collect();
+    format!(
+        "**Sources (from capture metadata):** {}",
+        parts.join("; ")
+    )
+}
+
 fn logs_dir() -> PathBuf {
     PathBuf::from(
         std::env::var("OMEGA_APP_LOGS_DIR").unwrap_or_else(|_| "logs".to_string()),
     )
+}
+
+const STORAGE_RETENTION_NOTE: &str = "All capture logs, edited summaries, pipeline history, and local research databases live in the folder above. \
+Remote APIs receive text only when you run embedding or summarization with keys configured. \
+Deleting one session removes its capture JSON and saved edits for that session; embeddings and chunks can remain inside phase SQLite files until you delete those databases or use delete all. \
+Delete all removes capture logs, app state, and phase databases in this folder but keeps your app exclusion list.";
+
+fn storage_entry_category(name: &str) -> Option<&'static str> {
+    if name.starts_with("capture-session-") && name.ends_with(".json") {
+        Some("capture_session")
+    } else if name == "app_state.db" {
+        Some("app_database")
+    } else if name.ends_with(".db") || name.ends_with(".db-wal") || name.ends_with(".db-shm") {
+        Some("phase_database")
+    } else if name == "capture_exclusions.json" {
+        Some("privacy_config")
+    } else if name == "phase1_live_status.json" {
+        Some("live_status")
+    } else {
+        None
+    }
+}
+
+/// List on-disk artifacts under the logs directory (paths, sizes) for transparency and erasure.
+pub fn get_storage_manifest() -> Result<StorageManifest, String> {
+    let root = logs_dir();
+    let root_abs = fs::canonicalize(&root).unwrap_or_else(|_| {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&root)
+    });
+    let mut entries: Vec<StorageManifestEntry> = Vec::new();
+    let mut total: u64 = 0;
+    if root_abs.is_dir() {
+        for entry in fs::read_dir(&root_abs).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if name.ends_with(".tmp") || name.starts_with('.') {
+                continue;
+            }
+            if !path.is_file() {
+                continue;
+            }
+            let Some(cat) = storage_entry_category(name) else {
+                continue;
+            };
+            let bytes = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let rel = path
+                .strip_prefix(&root_abs)
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| name.to_string());
+            total += bytes;
+            entries.push(StorageManifestEntry {
+                category: cat.to_string(),
+                path: rel,
+                absolute_path: path.display().to_string(),
+                bytes,
+            });
+        }
+    }
+    entries.sort_by(|a, b| a.category.cmp(&b.category).then_with(|| a.path.cmp(&b.path)));
+    Ok(StorageManifest {
+        logs_root_absolute: root_abs.display().to_string(),
+        retention_note: STORAGE_RETENTION_NOTE.to_string(),
+        entries,
+        total_bytes: total,
+    })
+}
+
+pub fn delete_session_data(session_key: String) -> Result<DeleteLocalDataResponse, String> {
+    if !session_key.starts_with("capture-session-")
+        || session_key.contains('/')
+        || session_key.contains('\\')
+        || session_key.contains("..")
+    {
+        return Err("invalid session key".to_string());
+    }
+    let json_path = logs_dir().join(format!("{session_key}.json"));
+    let conn = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
+    app_db::delete_session_records(&conn, &session_key).map_err(|e| e.to_string())?;
+    if json_path.is_file() {
+        fs::remove_file(&json_path).map_err(|e| e.to_string())?;
+    }
+    Ok(DeleteLocalDataResponse {
+        ok: true,
+        restart_recommended: false,
+        message: "Removed this session’s capture log and saved summary data.".to_string(),
+    })
+}
+
+/// Erase capture JSON files, SQLite databases (app + phase), and live status. Preserves `capture_exclusions.json`.
+pub fn delete_all_local_session_data() -> Result<DeleteLocalDataResponse, String> {
+    let root = logs_dir();
+    let root_path = fs::canonicalize(&root).unwrap_or_else(|_| {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&root)
+    });
+    if root_path.is_dir() {
+        for entry in fs::read_dir(&root_path).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !path.is_file() {
+                continue;
+            }
+            let wipe = (name.starts_with("capture-session-") && name.ends_with(".json"))
+                || name.ends_with(".db")
+                || name.ends_with(".db-wal")
+                || name.ends_with(".db-shm")
+                || name == "phase1_live_status.json";
+            if wipe {
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
+    crate::capture_live_status::reset().map_err(|e| e.to_string())?;
+    let app_path = app_db_path();
+    if !app_path.exists() {
+        let _ = app_db::open_app_db(&app_path).map_err(|e| e.to_string())?;
+    }
+    Ok(DeleteLocalDataResponse {
+        ok: true,
+        restart_recommended: true,
+        message: "Removed local capture logs, summaries, pipeline history, and research databases. App exclusions were kept. Restart Omega (quit and reopen) before running ingest or summarize again."
+            .to_string(),
+    })
 }
 
 fn app_db_path() -> PathBuf {
@@ -166,11 +328,32 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>, Vec<Sessi
             .get("detailed_summary")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
-        let body = format!("{one_liner}\n\n{detail}").trim().to_string();
+        let mut source_attribution: Vec<SourceAttribution> = parsed
+            .get("source_attribution")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+        if source_attribution.is_empty() {
+            source_attribution = phase4::bucket_source_attribution(&conn, bucket_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|r| SourceAttribution {
+                    app_name: r.app_name,
+                    window_title: r.window_title,
+                })
+                .collect();
+        }
+        let sources_md = format_sources_markdown(&source_attribution);
+        let core_body = format!("{one_liner}\n\n{detail}").trim().to_string();
+        let body = if sources_md.is_empty() {
+            core_body
+        } else {
+            format!("{core_body}\n\n{sources_md}")
+        };
         buckets.push(SessionBucket {
             bucket_id,
             title,
             body,
+            source_attribution,
         });
     }
 
@@ -198,22 +381,34 @@ fn fallback_summary_from_ingested_chunks(db_path: &Path) -> Result<Option<String
         .with_context(|| format!("open phase db for chunk fallback '{}'", db_path.display()))?;
     let mut stmt = conn
         .prepare(
-            "SELECT c.chunk_text, cap.app_name
+            "SELECT c.chunk_text, cap.app_name, cap.window_title
              FROM chunks c
              JOIN captures cap ON cap.canonical_hash = c.canonical_hash
              ORDER BY cap.timestamp_epoch_secs ASC, c.chunk_index ASC",
         )
         .context("prepare chunk fallback query")?;
     let rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
     })?;
 
     let mut parts: Vec<String> = Vec::new();
     let mut total: usize = 0;
     const MAX_CHARS: usize = 48_000;
     for row in rows {
-        let (chunk_text, app_name) = row.context("chunk fallback row")?;
-        let block = format!("### {app_name}\n\n{}\n\n", chunk_text.trim());
+        let (chunk_text, app_name, window_title) = row.context("chunk fallback row")?;
+        let head = {
+            let w = window_title.trim();
+            if w.is_empty() {
+                app_name.clone()
+            } else {
+                format!("{app_name} — {w}")
+            }
+        };
+        let block = format!("### {head}\n\n{}\n\n", chunk_text.trim());
         if total + block.len() > MAX_CHARS {
             break;
         }
@@ -443,4 +638,35 @@ pub fn list_pipeline_runs(limit: Option<u32>) -> Result<Vec<PipelineRunRecord>, 
 
 pub fn get_api_usage(session_key: Option<String>) -> Result<usage::ApiUsageResponse, String> {
     usage::get_api_usage_response(session_key.as_deref()).map_err(|e| e.to_string())
+}
+
+pub fn get_capture_exclusions() -> Result<CaptureExclusionsState, String> {
+    let c = privacy_config::load_capture_exclusions().map_err(|e| e.to_string())?;
+    Ok(CaptureExclusionsState {
+        excluded_app_names: c.excluded_app_names,
+    })
+}
+
+pub fn set_capture_exclusions(names: Vec<String>) -> Result<CaptureExclusionsState, String> {
+    let cfg = privacy_config::CaptureExclusionsConfig {
+        excluded_app_names: names,
+    };
+    privacy_config::save_capture_exclusions(&cfg).map_err(|e| e.to_string())?;
+    let loaded = privacy_config::load_capture_exclusions().map_err(|e| e.to_string())?;
+    Ok(CaptureExclusionsState {
+        excluded_app_names: loaded.excluded_app_names,
+    })
+}
+
+pub fn get_phase1_live_status() -> Result<Phase1LiveStatus, String> {
+    crate::capture_live_status::read_or_default().map_err(|e| e.to_string())
+}
+
+pub fn reset_phase1_live_status() -> Result<(), String> {
+    crate::capture_live_status::reset().map_err(|e| e.to_string())
+}
+
+pub fn set_capture_paused(paused: bool) -> Result<Phase1LiveStatus, String> {
+    crate::capture_live_status::set_capture_paused(paused).map_err(|e| e.to_string())?;
+    get_phase1_live_status()
 }

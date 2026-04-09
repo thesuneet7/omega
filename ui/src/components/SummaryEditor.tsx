@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NotionLikeMarkdownEditor } from "./NotionLikeMarkdownEditor";
 
 type Props = {
   initialTitle: string;
@@ -47,16 +48,16 @@ export function SummaryEditor({ initialTitle, initialBody, onSave, saving }: Pro
         placeholder="Title"
         aria-label="Summary title"
       />
-      <textarea
-        className="editor-body"
-        value={body}
-        onChange={(e) => {
-          setBody(e.target.value);
+      <NotionLikeMarkdownEditor
+        className="editor-body-notion"
+        markdown={body}
+        onMarkdownChange={(md) => {
+          setBody(md);
           setDirty(true);
         }}
-        rows={18}
-        placeholder="Summary body…"
+        placeholder="Summary body… Type / for headings, lists, and more."
         aria-label="Summary body"
+        documentTitle={title || "Session summary"}
       />
     </section>
   );

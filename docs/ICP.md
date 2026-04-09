@@ -136,3 +136,5 @@ The differentiated “transparent on-screen what to do next” idea is strongest
 ---
 
 *Living document — align with Phase 0 in ROADMAP and revise as the wedge is validated.*
+
+**See also:** [GTM — first region, channels, and how to approach customers](GTM_REGION_CHANNELS_AND_FIRST_CUSTOMERS.md) (operationalizes geography, buyer motion, and distribution vs. this ICP).
