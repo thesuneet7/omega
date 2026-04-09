@@ -562,6 +562,21 @@ pub fn list_summary_revisions(session_key: String) -> Result<Vec<crate::app_mode
     app_db::list_revisions(&conn, summary_id).map_err(|e| e.to_string())
 }
 
+/// Run phase 2 (embed new captures) and phase 3 (bucket assignment) without writing `pipeline_runs` rows.
+/// Used for incremental processing while a capture session is active; end-of-session still uses
+/// `run_pipeline_stage` so the UI shows explicit completion runs.
+pub fn run_phase2_phase3_ingest_only(input_log_path: PathBuf) -> Result<(), String> {
+    if let Some(sk) = input_log_path.file_stem().and_then(|s| s.to_str()) {
+        std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+    }
+    let input_str = input_log_path.display().to_string();
+    let res = run_pipeline_stage_impl("phase2", Some(input_str))
+        .map_err(|e| e.to_string())
+        .and_then(|_| run_pipeline_stage_impl("phase3", None).map_err(|e| e.to_string()));
+    let _ = std::env::remove_var("OMEGA_USAGE_SESSION_KEY");
+    res
+}
+
 fn run_pipeline_stage_impl(stage: &str, input_ref: Option<String>) -> Result<()> {
     let session_key = std::env::var("OMEGA_USAGE_SESSION_KEY").ok().or_else(|| {
         input_ref

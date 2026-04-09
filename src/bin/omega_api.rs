@@ -16,6 +16,7 @@ use sensor_layer::usage::ApiUsageResponse;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tower_http::cors::{Any, CorsLayer};
@@ -68,10 +69,74 @@ struct DeleteSessionBody {
     session_key: String,
 }
 
+/// Background phase2+phase3 while capture is running (`stop` is shared with the worker thread).
+struct IngestWorkerState {
+    stop: Arc<AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Default for IngestWorkerState {
+    fn default() -> Self {
+        Self {
+            stop: Arc::new(AtomicBool::new(true)),
+            handle: None,
+        }
+    }
+}
+
+fn stop_and_join_ingest_worker(state: &mut IngestWorkerState) {
+    state.stop.store(true, Ordering::SeqCst);
+    if let Some(h) = state.handle.take() {
+        let _ = h.join();
+    }
+}
+
+fn spawn_ingest_worker(state: &mut IngestWorkerState, runtime_start_epoch_secs: u64) {
+    stop_and_join_ingest_worker(state);
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_thread = Arc::clone(&stop);
+    let handle = std::thread::Builder::new()
+        .name("omega-ingest".to_string())
+        .spawn(move || ingest_worker_loop(runtime_start_epoch_secs, stop_thread))
+        .expect("spawn omega-ingest worker");
+    state.stop = stop;
+    state.handle = Some(handle);
+}
+
+fn incremental_ingest_interval_ms() -> u64 {
+    std::env::var("OMEGA_INCREMENTAL_INGEST_INTERVAL_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8_000u64)
+        .clamp(2_000, 120_000)
+}
+
+fn ingest_worker_loop(runtime_start_epoch_secs: u64, stop: Arc<AtomicBool>) {
+    let interval_ms = incremental_ingest_interval_ms();
+    while !stop.load(Ordering::SeqCst) {
+        match latest_runtime_capture_log(runtime_start_epoch_secs) {
+            Ok(Some(path)) => {
+                if let Err(e) = app_commands::run_phase2_phase3_ingest_only(path) {
+                    eprintln!("omega-api incremental ingest: {e}");
+                }
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("omega-api incremental ingest: {e}"),
+        }
+        let step = 250u64;
+        let mut waited = 0u64;
+        while waited < interval_ms && !stop.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(step));
+            waited += step;
+        }
+    }
+}
+
 #[derive(Clone)]
 struct ApiState {
     runtime_start_epoch_secs: u64,
     phase1: Arc<Mutex<Phase1State>>,
+    ingest: Arc<Mutex<IngestWorkerState>>,
 }
 
 struct Phase1State {
@@ -148,6 +213,11 @@ fn stop_phase1_capture(state: &mut Phase1State) -> Result<(), String> {
 
 /// Lock phase1 state. If a previous holder panicked, recover the inner guard so fetch can continue.
 fn lock_phase1(m: &Mutex<Phase1State>) -> MutexGuard<'_, Phase1State> {
+    m.lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn lock_ingest(m: &Mutex<IngestWorkerState>) -> MutexGuard<'_, IngestWorkerState> {
     m.lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -354,7 +424,15 @@ async fn fetch_summary(
         .and_then(|s| s.to_str())
         .map(|s| s.to_string());
     let input_ref = latest_log.display().to_string();
+    let ingest = Arc::clone(&state.ingest);
+    let runtime_secs = state.runtime_start_epoch_secs;
     let pipeline_result = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        {
+            let mut w = ingest
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            stop_and_join_ingest_worker(&mut *w);
+        }
         if let Some(ref sk) = session_key {
             std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
         }
@@ -375,7 +453,11 @@ async fn fetch_summary(
         )
     })?;
 
-    // Always resume Phase 1 capture after the pipeline attempt (success or failure).
+    // Resume incremental ingest + Phase 1 capture after the pipeline attempt (success or failure).
+    {
+        let mut ingest = lock_ingest(&state.ingest);
+        spawn_ingest_worker(&mut *ingest, runtime_secs);
+    }
     {
         let mut phase1 = lock_phase1(&state.phase1);
         ensure_phase1_running(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -389,6 +471,10 @@ async fn start_session(
     State(state): State<ApiState>,
 ) -> Result<Json<SessionStatusResponse>, (StatusCode, String)> {
     app_commands::reset_phase1_live_status().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    {
+        let mut ingest = lock_ingest(&state.ingest);
+        spawn_ingest_worker(&mut *ingest, state.runtime_start_epoch_secs);
+    }
     let mut phase1 = lock_phase1(&state.phase1);
     ensure_phase1_running(&mut phase1).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(SessionStatusResponse { status: "running" }))
@@ -403,28 +489,35 @@ async fn end_session(
     }
     let _ = app_commands::reset_phase1_live_status();
 
-    let latest_log = latest_runtime_capture_log(state.runtime_start_epoch_secs)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                "No runtime capture log found yet. Let phase1 run and interact, then end the session."
-                    .to_string(),
-            )
-        })?;
-
-    let session_key = latest_log
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_string());
-    let input_ref = latest_log.display().to_string();
+    let ingest = Arc::clone(&state.ingest);
+    let runtime_secs = state.runtime_start_epoch_secs;
     let summary = tokio::task::spawn_blocking(move || -> Result<String, String> {
-        if let Some(ref sk) = session_key {
-            std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+        {
+            let mut w = ingest
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            stop_and_join_ingest_worker(&mut *w);
         }
+        let latest_log = latest_runtime_capture_log(runtime_secs).map_err(|e| e.to_string())?;
+        let latest_log = latest_log.ok_or_else(|| {
+            "No runtime capture log found yet. Let phase1 run and interact, then end the session."
+                .to_string()
+        })?;
+        let session_key = latest_log
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+        // Final ingest + stitch (no pipeline_runs rows): catches captures since the last background tick.
+        // Record only phase4 as the explicit "end session" summarize step.
         let r = (|| -> Result<String, String> {
-            app_commands::run_pipeline_stage("phase2".to_string(), Some(input_ref))?;
-            app_commands::run_pipeline_stage("phase3".to_string(), None)?;
+            if let Some(ref sk) = session_key {
+                std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+            }
+            app_commands::run_phase2_phase3_ingest_only(latest_log.clone())
+                .map_err(|e| format!("final ingest/stitch: {e}"))?;
+            if let Some(ref sk) = session_key {
+                std::env::set_var("OMEGA_USAGE_SESSION_KEY", sk);
+            }
             app_commands::run_pipeline_stage("phase4".to_string(), None)?;
             app_commands::load_generated_summary_text()
         })();
@@ -433,7 +526,14 @@ async fn end_session(
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("pipeline task join failed: {e}")))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    .map_err(|e| {
+        let code = if e.contains("No runtime capture log") {
+            StatusCode::BAD_REQUEST
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        };
+        (code, e)
+    })?;
 
     Ok(Json(FetchSummaryResponse { summary }))
 }
@@ -461,6 +561,7 @@ async fn main() -> anyhow::Result<()> {
     let shared_state = ApiState {
         runtime_start_epoch_secs,
         phase1: Arc::new(Mutex::new(phase1_state)),
+        ingest: Arc::new(Mutex::new(IngestWorkerState::default())),
     };
 
     let app = Router::new()
