@@ -74,10 +74,17 @@ impl SummarizeConfig {
         let gemini_base_url = std::env::var("OMEGA_GEMINI_BASE_URL")
             .unwrap_or_else(|_| "https://generativelanguage.googleapis.com".to_string());
         let gemini_api_key = std::env::var("OMEGA_GEMINI_API_KEY").ok();
-        let model = std::env::var("OMEGA_PHASE4_MODEL").unwrap_or_else(|_| {
-            // Stable, lowest-cost Flash tier on the Gemini API (2.0 Flash is deprecated).
-            "gemini-2.5-flash-lite".to_string()
-        });
+        let model = match std::env::var("OMEGA_PHASE4_MODEL") {
+            Ok(m) => {
+                let t = m.trim();
+                if t.is_empty() {
+                    "gemini-2.5-flash-lite".to_string()
+                } else {
+                    t.to_string()
+                }
+            }
+            Err(_) => "gemini-2.5-flash-lite".to_string(),
+        };
         let max_input_chars = std::env::var("OMEGA_PHASE4_MAX_INPUT_CHARS")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())

@@ -1,3 +1,4 @@
+use crate::phase2::EmbeddingBackend;
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
@@ -39,11 +40,9 @@ impl StitchConfig {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(15);
-        let embedding_backend =
-            std::env::var("OMEGA_EMBEDDING_BACKEND").unwrap_or_else(|_| "gemini".to_string());
-        let embed_model = std::env::var("OMEGA_EMBED_MODEL").unwrap_or_else(|_| {
-            "gemini-embedding-001".to_string()
-        });
+        let backend = EmbeddingBackend::from_env()?;
+        let embedding_backend = backend.as_str().to_string();
+        let embed_model = crate::phase2::resolve_embed_model_for_backend(&backend)?;
         Ok(Self {
             db_path,
             output_path,

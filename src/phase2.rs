@@ -1,4 +1,5 @@
 use crate::models::{Phase1Payload, VisualLogItem};
+use crate::openai_compat_url::{ensure_openai_v1_base, openai_embeddings_url};
 use anyhow::{anyhow, Context, Result};
 use regex::Regex;
 use reqwest::blocking::{Client, Response};
@@ -59,20 +60,110 @@ pub struct IngestionOutput {
 pub enum EmbeddingBackend {
     Gemini,
     OpenAI,
+    /// OpenAI-compatible `POST …/v1/embeddings` using `OMEGA_XAI_API_KEY` and `OMEGA_BASE_URL`.
+    Xai,
     Hash,
 }
 
 impl EmbeddingBackend {
-    fn from_env() -> Result<Self> {
+    pub fn from_env() -> Result<Self> {
         let raw = std::env::var("OMEGA_EMBEDDING_BACKEND").unwrap_or_else(|_| "gemini".to_string());
         match raw.trim().to_ascii_lowercase().as_str() {
             "gemini" => Ok(Self::Gemini),
             "openai" => Ok(Self::OpenAI),
+            "xai" => Ok(Self::Xai),
             "hash" => Ok(Self::Hash),
             other => Err(anyhow!(
-                "unsupported OMEGA_EMBEDDING_BACKEND='{other}', expected 'gemini', 'openai', or 'hash'"
+                "unsupported OMEGA_EMBEDDING_BACKEND='{other}', expected 'gemini', 'openai', 'xai', or 'hash'"
             )),
         }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Gemini => "gemini",
+            Self::OpenAI => "openai",
+            Self::Xai => "xai",
+            Self::Hash => "hash",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct XaiModelsResponse {
+    data: Vec<XaiModelItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct XaiModelItem {
+    id: String,
+}
+
+/// If `OMEGA_EMBED_MODEL` is unset, call `GET /v1/models` and pick the first model id containing `embed`.
+fn discover_xai_embedding_model(base_url: &str, api_key: &str) -> Result<String> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .context("failed to create HTTP client for xAI model discovery")?;
+    let url = format!("{}/models", ensure_openai_v1_base(base_url));
+    let response = client
+        .get(&url)
+        .bearer_auth(api_key)
+        .send()
+        .with_context(|| format!("failed to GET {url}"))?;
+    let status = response.status();
+    let body = response.text().unwrap_or_default();
+    if !status.is_success() {
+        return Err(anyhow!(
+            "xAI list models failed status={status} body={body}"
+        ));
+    }
+    let parsed: XaiModelsResponse =
+        serde_json::from_str(&body).context("parse xAI GET /v1/models JSON")?;
+    let ids: Vec<String> = parsed.data.into_iter().map(|m| m.id).collect();
+    let pick = |needle: &str| {
+        ids.iter()
+            .find(|id| id.to_lowercase().contains(needle))
+            .cloned()
+    };
+    if let Some(m) = pick("embed") {
+        return Ok(m);
+    }
+    if let Some(m) = pick("embedding") {
+        return Ok(m);
+    }
+    Err(anyhow!(
+        "no embedding-capable model found in GET /v1/models (need an id containing 'embed'). \
+         Set OMEGA_EMBED_MODEL to your team’s embedding model id. Available ids: {}",
+        ids.join(", ")
+    ))
+}
+
+/// Resolves `OMEGA_EMBED_MODEL` per backend; for xAI with no env var, discovers via GET /v1/models.
+pub fn resolve_embed_model_for_backend(backend: &EmbeddingBackend) -> Result<String> {
+    let explicit = std::env::var("OMEGA_EMBED_MODEL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    match backend {
+        EmbeddingBackend::Xai => {
+            if let Some(m) = explicit {
+                return Ok(m);
+            }
+            let base_url = std::env::var("OMEGA_BASE_URL")
+                .unwrap_or_else(|_| "https://api.x.ai/v1".to_string());
+            let api_key = std::env::var("OMEGA_XAI_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    anyhow!("missing OMEGA_XAI_API_KEY (required when OMEGA_EMBEDDING_BACKEND=xai)")
+                })?;
+            discover_xai_embedding_model(&base_url, &api_key)
+        }
+        EmbeddingBackend::Gemini => Ok(explicit.unwrap_or_else(|| "gemini-embedding-001".to_string())),
+        EmbeddingBackend::OpenAI => Ok(explicit.unwrap_or_else(|| "text-embedding-3-small".to_string())),
+        EmbeddingBackend::Hash => Ok(explicit.unwrap_or_else(|| "hash".to_string())),
     }
 }
 
@@ -157,10 +248,7 @@ impl IngestionConfig {
         let openai_base_url = std::env::var("OMEGA_OPENAI_BASE_URL")
             .unwrap_or_else(|_| "https://api.openai.com".to_string());
         let openai_api_key = std::env::var("OMEGA_OPENAI_API_KEY").ok();
-        let embed_model = std::env::var("OMEGA_EMBED_MODEL").unwrap_or_else(|_| {
-            // Stable text embeddings API; prefer over legacy text-embedding-004 (deprecated path).
-            "gemini-embedding-001".to_string()
-        });
+        let embed_model = resolve_embed_model_for_backend(&backend)?;
         let db_path = PathBuf::from(
             std::env::var("OMEGA_PHASE2_DB_PATH").unwrap_or_else(|_| "logs/phase2.db".to_string()),
         );
@@ -280,13 +368,15 @@ struct GeminiProvider {
     retry_base_delay_ms: u64,
 }
 
-struct OpenAIProvider {
+/// OpenAI- or xAI-compatible `POST /v1/embeddings`.
+struct OpenAiCompatEmbeddingProvider {
     client: Client,
     base_url: String,
     api_key: String,
     model: String,
     max_retries: usize,
     retry_base_delay_ms: u64,
+    backend_name: &'static str,
 }
 
 struct HashProvider {
@@ -339,10 +429,11 @@ impl EmbeddingProvider for GeminiProvider {
     }
 }
 
-impl EmbeddingProvider for OpenAIProvider {
+impl EmbeddingProvider for OpenAiCompatEmbeddingProvider {
     fn embed(&self, text: &str, _task_type: EmbedTaskType) -> Result<Vec<f32>> {
+        let source = self.backend_name;
         with_retries(self.max_retries, self.retry_base_delay_ms, || {
-            let endpoint = format!("{}/v1/embeddings", self.base_url.trim_end_matches('/'));
+            let endpoint = openai_embeddings_url(&self.base_url);
             let body = OpenAIEmbeddingRequest {
                 model: &self.model,
                 input: text,
@@ -357,7 +448,7 @@ impl EmbeddingProvider for OpenAIProvider {
                     format!("failed to connect to embeddings endpoint at {endpoint}")
                 })?;
 
-            maybe_retryable_response(response, "openai", |resp| {
+            maybe_retryable_response(response, source, |resp| {
                 let parsed: OpenAIEmbeddingResponse = resp
                     .json()
                     .context("failed to parse OpenAI-compatible embedding response")?;
@@ -378,7 +469,7 @@ impl EmbeddingProvider for OpenAIProvider {
     }
 
     fn backend_name(&self) -> &'static str {
-        "openai"
+        self.backend_name
     }
 
     fn model_name(&self) -> &str {
@@ -555,13 +646,34 @@ fn create_provider(config: &IngestionConfig) -> Result<Box<dyn EmbeddingProvider
                     anyhow!("missing OMEGA_OPENAI_API_KEY (required when backend=openai)")
                 })?
                 .to_string();
-            Ok(Box::new(OpenAIProvider {
+            Ok(Box::new(OpenAiCompatEmbeddingProvider {
                 client,
                 base_url: config.openai_base_url.clone(),
                 api_key,
                 model: config.embed_model.clone(),
                 max_retries: config.max_retries,
                 retry_base_delay_ms: config.retry_base_delay_ms,
+                backend_name: "openai",
+            }))
+        }
+        EmbeddingBackend::Xai => {
+            let base_url = std::env::var("OMEGA_BASE_URL")
+                .unwrap_or_else(|_| "https://api.x.ai/v1".to_string());
+            let api_key = std::env::var("OMEGA_XAI_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    anyhow!("missing OMEGA_XAI_API_KEY (required when backend=xai)")
+                })?;
+            Ok(Box::new(OpenAiCompatEmbeddingProvider {
+                client,
+                base_url,
+                api_key,
+                model: config.embed_model.clone(),
+                max_retries: config.max_retries,
+                retry_base_delay_ms: config.retry_base_delay_ms,
+                backend_name: "xai",
             }))
         }
         EmbeddingBackend::Hash => Ok(Box::new(HashProvider {
