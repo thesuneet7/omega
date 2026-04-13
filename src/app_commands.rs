@@ -1,7 +1,9 @@
+use crate::actions::{self, ActionBucketInput, ActionSourceRef, ActionType};
 use crate::app_db;
 use crate::app_models::{
-    CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord, SessionBucket,
-    SessionListItem, SessionSummaryState, SourceAttribution, StorageManifest, StorageManifestEntry,
+    ActionOutputRecord, CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord,
+    SessionBucket, SessionListItem, SessionSummaryState, SourceAttribution, StorageManifest,
+    StorageManifestEntry,
 };
 use crate::capture_live_status::Phase1LiveStatus;
 use crate::privacy_config;
@@ -440,11 +442,49 @@ pub fn load_generated_summary_text() -> Result<String, String> {
         .join("\n\n"))
 }
 
+const FALLBACK_MARKER: &str = "## Summary (from ingested text)";
+
+fn body_is_fallback(body: &str) -> bool {
+    body.trim().starts_with(FALLBACK_MARKER)
+}
+
 fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
     let app_db = app_db::open_app_db(&app_db_path())?;
     if let Some((summary_id, title, body, source_bucket_ids)) =
         app_db::get_summary_row(&app_db, session_key)?
     {
+        // If the cached body is a Phase-4-failure fallback, re-check the phase DB in case
+        // summaries have since been generated (e.g. via a manual re-run or retry).
+        if body_is_fallback(&body) {
+            let (fresh_body, fresh_ids, fresh_buckets) =
+                load_generated_summary(&phase_db_path())?;
+            if !fresh_buckets.is_empty() {
+                app_db::upsert_current_summary(
+                    &app_db,
+                    session_key,
+                    &title,
+                    &fresh_body,
+                    &fresh_ids,
+                )?;
+                app_db::insert_revision(
+                    &app_db,
+                    summary_id,
+                    &title,
+                    &fresh_body,
+                    "system-regenerated",
+                )?;
+                let revisions = app_db::list_revisions(&app_db, summary_id)?;
+                return Ok(SessionSummaryState {
+                    session_key: session_key.to_string(),
+                    title,
+                    body: fresh_body,
+                    source_bucket_ids: fresh_ids,
+                    revisions,
+                    buckets: fresh_buckets,
+                });
+            }
+        }
+
         let revisions = app_db::list_revisions(&app_db, summary_id)?;
         let buckets = buckets_from_body(&body);
         return Ok(SessionSummaryState {
@@ -577,6 +617,31 @@ pub fn run_phase2_phase3_ingest_only(input_log_path: PathBuf) -> Result<(), Stri
     res
 }
 
+/// Run Phase 4 with one automatic retry (with --force) when all bucket summaries fail on the
+/// first attempt (typically a transient Gemini API error).
+fn run_phase4_with_retry(sk: Option<&str>) -> Result<()> {
+    let cfg = phase4::SummarizeConfig::from_env_and_args(None, None, false, false)?;
+    let (_path, summary) = phase4::run_summarization(cfg)?;
+    usage::record_phase4(&summary, sk)?;
+    if summary.summaries_failed > 0 && summary.summaries_written == 0 && summary.buckets_total > 0
+    {
+        eprintln!(
+            "omega: phase4 all {} bucket(s) failed; retrying once with --force",
+            summary.buckets_total
+        );
+        let cfg2 = phase4::SummarizeConfig::from_env_and_args(None, None, true, false)?;
+        let (_path2, summary2) = phase4::run_summarization(cfg2)?;
+        usage::record_phase4(&summary2, sk)?;
+        if summary2.summaries_written == 0 && summary2.buckets_total > 0 {
+            anyhow::bail!(
+                "phase4 failed for all {} bucket(s) after retry",
+                summary2.buckets_total
+            );
+        }
+    }
+    Ok(())
+}
+
 fn run_pipeline_stage_impl(stage: &str, input_ref: Option<String>) -> Result<()> {
     let session_key = std::env::var("OMEGA_USAGE_SESSION_KEY").ok().or_else(|| {
         input_ref
@@ -601,9 +666,7 @@ fn run_pipeline_stage_impl(stage: &str, input_ref: Option<String>) -> Result<()>
             Ok(())
         }
         "phase4" => {
-            let cfg = phase4::SummarizeConfig::from_env_and_args(None, None, false, false)?;
-            let (_path, summary) = phase4::run_summarization(cfg)?;
-            usage::record_phase4(&summary, sk)?;
+            run_phase4_with_retry(sk)?;
             Ok(())
         }
         _ => anyhow::bail!("unknown stage '{stage}'"),
@@ -684,4 +747,144 @@ pub fn reset_phase1_live_status() -> Result<(), String> {
 pub fn set_capture_paused(paused: bool) -> Result<Phase1LiveStatus, String> {
     crate::capture_live_status::set_capture_paused(paused).map_err(|e| e.to_string())?;
     get_phase1_live_status()
+}
+
+// ── Actions (Phase 5) ──────────────────────────────────────────────
+
+pub fn run_action_command(
+    session_key: String,
+    action_type_str: String,
+    bucket_ids: Option<Vec<i64>>,
+) -> Result<ActionOutputRecord, String> {
+    let action = ActionType::from_str(&action_type_str).map_err(|e| e.to_string())?;
+    let app_db_conn = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
+
+    let (_, _, body, _) = app_db::get_summary_row(&app_db_conn, &session_key)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("no summary found for session '{session_key}'"))?;
+
+    let all_buckets = buckets_from_body(&body);
+    if all_buckets.is_empty() {
+        return Err("no bucket summaries available for this session".to_string());
+    }
+
+    let selected: Vec<&SessionBucket> = if let Some(ref ids) = bucket_ids {
+        all_buckets
+            .iter()
+            .filter(|b| ids.contains(&b.bucket_id))
+            .collect()
+    } else {
+        all_buckets.iter().collect()
+    };
+
+    if selected.is_empty() {
+        return Err("no matching buckets found for the given IDs".to_string());
+    }
+
+    let action_inputs: Vec<ActionBucketInput> = selected
+        .iter()
+        .map(|b| {
+            let phase_db = phase_db_path();
+            let (tags, primary_apps, one_liner, detailed_summary) =
+                load_bucket_detail_from_phase_db(&phase_db, b.bucket_id);
+            ActionBucketInput {
+                bucket_id: b.bucket_id,
+                title: b.title.clone(),
+                one_liner,
+                detailed_summary,
+                tags,
+                primary_apps,
+                source_attribution: b
+                    .source_attribution
+                    .iter()
+                    .map(|s| ActionSourceRef {
+                        app_name: s.app_name.clone(),
+                        window_title: s.window_title.clone(),
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
+
+    let used_ids: Vec<i64> = selected.iter().map(|b| b.bucket_id).collect();
+
+    let output =
+        actions::run_action(&session_key, action, &action_inputs, &used_ids)
+            .map_err(|e| format!("action failed: {e:#}"))?;
+
+    let id = app_db::insert_action_output(
+        &app_db_conn,
+        &session_key,
+        action.as_str(),
+        &output.input_bucket_ids,
+        &output.output_body,
+        &output.model,
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(ActionOutputRecord {
+        id,
+        session_key: output.session_key,
+        action_type: output.action_type,
+        input_bucket_ids: output.input_bucket_ids,
+        output_body: output.output_body,
+        model: output.model,
+        generated_at_epoch_secs: output.generated_at_epoch_secs,
+    })
+}
+
+pub fn list_action_outputs(session_key: String) -> Result<Vec<ActionOutputRecord>, String> {
+    let conn = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
+    app_db::list_action_outputs(&conn, &session_key).map_err(|e| e.to_string())
+}
+
+/// Best-effort extraction of structured fields from the phase DB's `task_bucket_summaries`.
+fn load_bucket_detail_from_phase_db(
+    db_path: &std::path::Path,
+    bucket_id: i64,
+) -> (Vec<String>, Vec<String>, String, String) {
+    let empty = (Vec::new(), Vec::new(), String::new(), String::new());
+    let Ok(conn) = rusqlite::Connection::open(db_path) else {
+        return empty;
+    };
+    let row: Option<String> = conn
+        .query_row(
+            "SELECT summary_json FROM task_bucket_summaries WHERE bucket_id = ?1",
+            rusqlite::params![bucket_id],
+            |row| row.get(0),
+        )
+        .ok();
+    let Some(json_str) = row else { return empty };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) else {
+        return empty;
+    };
+    let tags = v
+        .get("tags")
+        .and_then(|t| t.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let primary_apps = v
+        .get("primary_apps")
+        .and_then(|t| t.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let one_liner = v
+        .get("one_liner")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let detailed_summary = v
+        .get("detailed_summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    (tags, primary_apps, one_liner, detailed_summary)
 }

@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod app_commands;
 pub mod app_db;
 pub mod app_models;

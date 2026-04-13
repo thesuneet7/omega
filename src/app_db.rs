@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS api_usage_session (
   phase4_output_chars INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS action_outputs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_key TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  input_bucket_ids TEXT NOT NULL,
+  output_body TEXT NOT NULL,
+  model TEXT NOT NULL,
+  generated_at INTEGER NOT NULL
+);
 "#,
     )
     .context("failed to create app db schema")?;
@@ -263,6 +273,73 @@ pub fn list_pipeline_runs(conn: &Connection, limit: usize) -> Result<Vec<Pipelin
         out.push(row.context("decode pipeline run row")?);
     }
     Ok(out)
+}
+
+// ── Action outputs ──────────────────────────────────────────────────
+
+use crate::app_models::ActionOutputRecord;
+
+pub fn insert_action_output(
+    conn: &Connection,
+    session_key: &str,
+    action_type: &str,
+    input_bucket_ids: &[i64],
+    output_body: &str,
+    model: &str,
+) -> Result<i64> {
+    let now = now_epoch_secs() as i64;
+    let ids_json = serde_json::to_string(input_bucket_ids).context("serialize bucket ids")?;
+    conn.execute(
+        "INSERT INTO action_outputs (session_key, action_type, input_bucket_ids, output_body, model, generated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![session_key, action_type, ids_json, output_body, model, now],
+    )
+    .context("insert action_output")?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn list_action_outputs(
+    conn: &Connection,
+    session_key: &str,
+) -> Result<Vec<ActionOutputRecord>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, session_key, action_type, input_bucket_ids, output_body, model, generated_at
+             FROM action_outputs
+             WHERE session_key = ?1
+             ORDER BY generated_at DESC, id DESC",
+        )
+        .context("prepare list action outputs")?;
+    let rows = stmt
+        .query_map(params![session_key], |row| {
+            let ids_json: String = row.get(3)?;
+            let input_bucket_ids: Vec<i64> =
+                serde_json::from_str(&ids_json).unwrap_or_default();
+            Ok(ActionOutputRecord {
+                id: row.get(0)?,
+                session_key: row.get(1)?,
+                action_type: row.get(2)?,
+                input_bucket_ids,
+                output_body: row.get(4)?,
+                model: row.get(5)?,
+                generated_at_epoch_secs: row.get::<_, i64>(6)? as u64,
+            })
+        })
+        .context("query action outputs")?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.context("decode action output row")?);
+    }
+    Ok(out)
+}
+
+pub fn delete_action_outputs_for_session(conn: &Connection, session_key: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM action_outputs WHERE session_key = ?1",
+        params![session_key],
+    )
+    .context("delete action_outputs for session")?;
+    Ok(())
 }
 
 #[cfg(test)]

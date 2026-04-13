@@ -233,3 +233,37 @@ export async function deleteSessionData(sessionKey: string): Promise<DeleteLocal
 export async function deleteAllLocalSessionData(): Promise<DeleteLocalDataResponse> {
   return apiPost("/api/privacy/delete-all-local", { confirm: true });
 }
+
+// ── Actions (Phase 5) ──────────────────────────────────────────────
+
+export type ActionOutputRecord = {
+  id: number;
+  session_key: string;
+  action_type: string;
+  input_bucket_ids: number[];
+  output_body: string;
+  model: string;
+  generated_at_epoch_secs: number;
+};
+
+export const ACTION_TYPES = [
+  { id: "report", label: "Report" },
+  { id: "prd", label: "PRD" },
+  { id: "email", label: "Email draft" },
+  { id: "timeline", label: "Timeline" },
+] as const;
+
+export type ActionTypeId = (typeof ACTION_TYPES)[number]["id"];
+
+export async function runAction(
+  sessionKey: string,
+  actionType: ActionTypeId,
+  bucketIds?: number[],
+): Promise<ActionOutputRecord> {
+  return apiPost("/api/action/run", { sessionKey, actionType, bucketIds });
+}
+
+export async function listActionOutputs(sessionKey: string): Promise<ActionOutputRecord[]> {
+  const q = new URLSearchParams({ session_key: sessionKey });
+  return apiGet(`/api/action/outputs?${q}`);
+}

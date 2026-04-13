@@ -8,8 +8,8 @@ use axum::{extract::State, Json, Router};
 use serde::Deserialize;
 use sensor_layer::app_commands;
 use sensor_layer::app_models::{
-    CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord, SessionListItem,
-    SessionSummaryState, StorageManifest, SummaryRevision,
+    ActionOutputRecord, CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord,
+    SessionListItem, SessionSummaryState, StorageManifest, SummaryRevision,
 };
 use sensor_layer::capture_live_status::Phase1LiveStatus;
 use sensor_layer::usage::ApiUsageResponse;
@@ -66,6 +66,21 @@ struct DeleteAllLocalBody {
 #[derive(Debug, Deserialize)]
 struct DeleteSessionBody {
     #[serde(rename = "sessionKey")]
+    session_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RunActionBody {
+    #[serde(rename = "sessionKey")]
+    session_key: String,
+    #[serde(rename = "actionType")]
+    action_type: String,
+    #[serde(default, rename = "bucketIds")]
+    bucket_ids: Option<Vec<i64>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ActionOutputsQuery {
     session_key: String,
 }
 
@@ -538,6 +553,29 @@ async fn end_session(
     Ok(Json(FetchSummaryResponse { summary }))
 }
 
+async fn run_action(
+    Json(body): Json<RunActionBody>,
+) -> Result<Json<ActionOutputRecord>, (StatusCode, String)> {
+    let session_key = body.session_key;
+    let action_type = body.action_type;
+    let bucket_ids = body.bucket_ids;
+    tokio::task::spawn_blocking(move || {
+        app_commands::run_action_command(session_key, action_type, bucket_ids)
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn list_action_outputs(
+    Query(q): Query<ActionOutputsQuery>,
+) -> Result<Json<Vec<ActionOutputRecord>>, (StatusCode, String)> {
+    app_commands::list_action_outputs(q.session_key)
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Match `sensor_layer` / CLI: load `.env` so OMEGA_EMBEDDING_BACKEND, keys, etc. apply to
@@ -584,6 +622,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/session/start", post(start_session))
         .route("/api/session/end", post(end_session))
         .route("/api/fetch-summary", post(fetch_summary))
+        .route("/api/action/run", post(run_action))
+        .route("/api/action/outputs", get(list_action_outputs))
         .with_state(shared_state)
         .layer(
             CorsLayer::new()

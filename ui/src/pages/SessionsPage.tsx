@@ -280,6 +280,7 @@ export function SessionsPage() {
           </section>
         ) : (summary.buckets ?? []).length > 0 ? (
           <BucketSummaryWorkspace
+            sessionKey={selected.session_key}
             sessionTitle={summary.title}
             buckets={summary.buckets ?? []}
             revisions={summary.revisions}

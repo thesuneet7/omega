@@ -93,3 +93,14 @@ pub struct PipelineRunRecord {
     pub ended_at_epoch_secs: Option<u64>,
     pub error_text: Option<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionOutputRecord {
+    pub id: i64,
+    pub session_key: String,
+    pub action_type: String,
+    pub input_bucket_ids: Vec<i64>,
+    pub output_body: String,
+    pub model: String,
+    pub generated_at_epoch_secs: u64,
+}

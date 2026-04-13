@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ActionPanel } from "./ActionPanel";
 import { NotionLikeMarkdownEditor } from "./NotionLikeMarkdownEditor";
 import { RevisionHistory } from "./RevisionHistory";
 import {
@@ -10,6 +11,7 @@ import {
 import { humanizeSummaryTitle } from "../lib/sessionDisplay";
 
 type Props = {
+  sessionKey: string;
   sessionTitle: string;
   buckets: SessionBucket[];
   revisions: SummaryRevision[];
@@ -45,6 +47,7 @@ function formatSourcesForCard(sources: SourceAttribution[] | undefined, max = 12
 }
 
 export function BucketSummaryWorkspace({
+  sessionKey,
   sessionTitle,
   buckets: initialBuckets,
   revisions,
@@ -142,6 +145,7 @@ export function BucketSummaryWorkspace({
             ))}
           </div>
         </section>
+        <ActionPanel sessionKey={sessionKey} buckets={buckets} />
         <RevisionHistory revisions={revisions} onRestore={onRestore} />
       </>
     );

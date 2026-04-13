@@ -32,6 +32,10 @@ pub struct SensorEngine {
     scroll_pending: bool,
     last_scroll_instant: Option<Instant>,
     scroll_idle_delay: Duration,
+    /// After the last key event, wait this long with no new keys before capturing (typing pause).
+    key_idle_pending: bool,
+    last_keypress_instant: Option<Instant>,
+    key_idle_delay: Duration,
     #[cfg(target_os = "macos")]
     vision_helper_binary: Option<PathBuf>,
     /// Lowercase app names from `capture_exclusions.json` (refreshed when the file changes).
@@ -76,10 +80,13 @@ impl SensorEngine {
             dropped_by_phash: 0,
             dropped_by_throttle: 0,
             last_capture_instant: None,
-            capture_cooldown: Duration::from_millis(500),
+            capture_cooldown: Duration::from_millis(200),
             scroll_pending: false,
             last_scroll_instant: None,
-            scroll_idle_delay: Duration::from_millis(500),
+            scroll_idle_delay: Duration::from_millis(200),
+            key_idle_pending: false,
+            last_keypress_instant: None,
+            key_idle_delay: Duration::from_millis(800),
             #[cfg(target_os = "macos")]
             vision_helper_binary,
             cached_excluded_app_names: Vec::new(),
@@ -100,8 +107,11 @@ impl SensorEngine {
         self.total_events_seen += 1;
 
         // Scroll is debounced: capture only once the scroll has gone idle.
+        // Key presses are debounced: capture only once typing has gone idle (see `tick`).
         match event {
             SensorEvent::Scroll => {
+                self.key_idle_pending = false;
+                self.last_keypress_instant = None;
                 self.scroll_pending = true;
                 self.last_scroll_instant = Some(Instant::now());
             }
@@ -110,6 +120,8 @@ impl SensorEngine {
                 // (because user intent has changed).
                 self.scroll_pending = false;
                 self.last_scroll_instant = None;
+                self.key_idle_pending = false;
+                self.last_keypress_instant = None;
                 let _ = self.try_capture("MouseClick");
             }
             SensorEvent::KeyPress => {
@@ -117,45 +129,55 @@ impl SensorEngine {
                 // (because user intent has changed).
                 self.scroll_pending = false;
                 self.last_scroll_instant = None;
-                let _ = self.try_capture("KeyPress");
+                self.key_idle_pending = true;
+                self.last_keypress_instant = Some(Instant::now());
             }
         }
     }
 
     /// Called periodically (e.g. from a `recv_timeout` loop) so "ScrollStopped"
-    /// can fire after the scroll goes idle.
+    /// can fire after the scroll goes idle, and "KeyPress" after typing goes idle.
     pub fn tick(&mut self) {
-        if !self.scroll_pending {
-            return;
+        if self.scroll_pending {
+            if let Some(last_scroll) = self.last_scroll_instant {
+                if last_scroll.elapsed() >= self.scroll_idle_delay {
+                    // Try to capture once. If throttled, keep pending so it will be retried.
+                    let attempt = self.try_capture("ScrollStopped");
+                    if matches!(
+                        attempt,
+                        CaptureAttempt::Accepted
+                            | CaptureAttempt::DroppedPhash
+                            | CaptureAttempt::DroppedExclusion
+                            | CaptureAttempt::DroppedPause
+                    ) {
+                        self.scroll_pending = false;
+                        self.last_scroll_instant = None;
+                    }
+                }
+            }
         }
 
-        let Some(last_scroll) = self.last_scroll_instant else {
-            return;
-        };
-
-        if last_scroll.elapsed() < self.scroll_idle_delay {
-            return;
-        }
-
-        // Try to capture once. If throttled, keep pending so it will be retried.
-        let attempt = self.try_capture("ScrollStopped");
-        if matches!(
-            attempt,
-            CaptureAttempt::Accepted
-                | CaptureAttempt::DroppedPhash
-                | CaptureAttempt::DroppedExclusion
-                | CaptureAttempt::DroppedPause
-        ) {
-            self.scroll_pending = false;
-            self.last_scroll_instant = None;
+        if self.key_idle_pending {
+            if let Some(last_key) = self.last_keypress_instant {
+                if last_key.elapsed() >= self.key_idle_delay {
+                    let attempt = self.try_capture("KeyPress");
+                    if matches!(
+                        attempt,
+                        CaptureAttempt::Accepted
+                            | CaptureAttempt::DroppedPhash
+                            | CaptureAttempt::DroppedExclusion
+                            | CaptureAttempt::DroppedPause
+                    ) {
+                        self.key_idle_pending = false;
+                        self.last_keypress_instant = None;
+                    }
+                }
+            }
         }
     }
 
-    /// On shutdown, attempt to flush any pending "ScrollStopped" capture if idle.
+    /// On shutdown, attempt to flush any pending debounced capture if idle.
     pub fn flush_pending_scroll(&mut self) {
-        if !self.scroll_pending {
-            return;
-        }
         self.tick();
     }
 
