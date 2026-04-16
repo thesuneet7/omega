@@ -415,14 +415,54 @@ OMEGA_PHASE4_DRY_RUN=true
 
 ---
 
+## Phase 5 (Actions) — Generate Documents from Buckets
+
+Phase 5 lets you generate structured documents from selected bucket summaries using an LLM.
+
+### Built-in action types
+
+| Action   | What it produces |
+| -------- | ---------------- |
+| Report   | Professional report with executive summary, key activities, findings, and next steps |
+| PRD      | Product Requirements Document inferred from session activity |
+| Email    | Concise professional email summarizing the session for a colleague/stakeholder |
+| Timeline | Chronological timeline of activities with context |
+
+### Custom prompt
+
+In addition to the four pre-made actions, you can enter a **custom prompt** to generate any output you want from the selected buckets. Type your instruction (e.g. "Write a Slack standup update", "Summarize into bullet points for my manager", "Create a blog post draft") and hit **Generate**. The LLM receives your prompt along with the full bucket data and produces markdown output.
+
+### How it works
+
+1. Select one or more bucket cards in the session summary view (or leave none selected to use all buckets).
+2. Click a built-in action button **or** type a custom prompt and click **Generate**.
+3. The backend collects detailed bucket data (title, one-liner, detailed summary, tags, apps, sources) and sends it to the Gemini API with the appropriate system prompt.
+4. The output is persisted in SQLite (`action_outputs` table) and displayed in the UI.
+5. All past outputs are listed in the **Past outputs** history — click any to re-view.
+
+### Action tuning
+
+Actions use the same Gemini key and model as Phase 4:
+
+```bash
+OMEGA_GEMINI_API_KEY=...
+OMEGA_PHASE4_MODEL=gemini-2.5-flash-lite
+```
+
+---
+
 ## Session App MVP (Electron + React + Rust API)
 
 This repo includes an MVP desktop session app:
 
 - Session list (from `logs/capture-session-*.json`)
-- Summary editor (generated seed + manual edits)
+- Bucket-based summary workspace with selectable cards
+- Notion-like rich text editor for each bucket
+- Action panel: 4 built-in actions (Report, PRD, Email, Timeline) + custom prompt input
+- Action output viewer with history
 - Revision history (restore any prior revision)
-- Pipeline actions (`phase2`, `phase3`, `phase4`) from the UI
+- Live capture controls (start/pause/resume/end session)
+- API usage meter, excluded apps panel, data manifest
 
 ### App stack layout
 
@@ -430,12 +470,16 @@ This repo includes an MVP desktop session app:
   - `src/app_models.rs`
   - `src/app_db.rs`
   - `src/app_commands.rs`
+- Action layer (LLM transforms):
+  - `src/actions.rs`
 - Local HTTP API for the UI (Electron talks to this instead of Tauri IPC):
   - `src/bin/omega_api.rs` (binds `127.0.0.1:17421` by default; override with `OMEGA_API_PORT`)
 - Electron shell + preload:
   - `ui/electron/main.cjs`, `ui/electron/preload.cjs`
 - React frontend:
-  - `ui/`
+  - `ui/src/pages/SessionsPage.tsx` — main page
+  - `ui/src/components/BucketSummaryWorkspace.tsx` — card grid + editor
+  - `ui/src/components/ActionPanel.tsx` — actions + custom prompt
 
 ### Run the MVP
 
@@ -460,9 +504,12 @@ make desktop
 1. Generate at least one capture log:
    - `cargo run --bin sensor_layer` then stop with `Ctrl+C`
 2. Open app and confirm a session appears in the left panel.
-3. Select session and confirm summary text loads.
-4. Edit title/body and click **Save Revision**.
-5. Confirm a new row appears in **Revision History**.
+3. Select session and confirm bucket cards load in the summary view.
+4. Click a card title to open the editor; edit and verify autosave.
+5. Click **Save Revision** and confirm a new row in **Revision History**.
 6. Click **Restore** on an old revision and verify editor updates.
-7. Run **Phase2**, **Phase3**, **Phase4** buttons and confirm run rows appear in pipeline history.
+7. Select one or more bucket cards using the checkboxes.
+8. Click a built-in action (e.g. **Report**) and confirm output renders.
+9. Type a custom prompt in the input field and click **Generate** — confirm custom output renders.
+10. Check **Past outputs** history shows all generated actions (built-in and custom).
 

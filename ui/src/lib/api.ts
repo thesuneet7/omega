@@ -253,14 +253,15 @@ export const ACTION_TYPES = [
   { id: "timeline", label: "Timeline" },
 ] as const;
 
-export type ActionTypeId = (typeof ACTION_TYPES)[number]["id"];
+export type ActionTypeId = (typeof ACTION_TYPES)[number]["id"] | "custom";
 
 export async function runAction(
   sessionKey: string,
   actionType: ActionTypeId,
   bucketIds?: number[],
+  customPrompt?: string,
 ): Promise<ActionOutputRecord> {
-  return apiPost("/api/action/run", { sessionKey, actionType, bucketIds });
+  return apiPost("/api/action/run", { sessionKey, actionType, bucketIds, customPrompt });
 }
 
 export async function listActionOutputs(sessionKey: string): Promise<ActionOutputRecord[]> {

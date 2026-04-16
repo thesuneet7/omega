@@ -77,6 +77,8 @@ struct RunActionBody {
     action_type: String,
     #[serde(default, rename = "bucketIds")]
     bucket_ids: Option<Vec<i64>>,
+    #[serde(default, rename = "customPrompt")]
+    custom_prompt: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -559,8 +561,9 @@ async fn run_action(
     let session_key = body.session_key;
     let action_type = body.action_type;
     let bucket_ids = body.bucket_ids;
+    let custom_prompt = body.custom_prompt;
     tokio::task::spawn_blocking(move || {
-        app_commands::run_action_command(session_key, action_type, bucket_ids)
+        app_commands::run_action_command(session_key, action_type, bucket_ids, custom_prompt)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

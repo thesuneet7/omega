@@ -25,6 +25,7 @@ function formatDate(epochSecs: number): string {
 }
 
 function actionLabel(type: string): string {
+  if (type === "custom") return "Custom";
   return ACTION_TYPES.find((a) => a.id === type)?.label ?? type;
 }
 
@@ -33,6 +34,7 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ActionOutputRecord | null>(null);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -49,13 +51,13 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
     setError(null);
   }, [refresh]);
 
-  const handleRun = async (actionType: ActionTypeId) => {
+  const handleRun = async (actionType: ActionTypeId, prompt?: string) => {
     if (running) return;
     setRunning(actionType);
     setError(null);
     try {
       const ids = selectedBucketIds.size > 0 ? [...selectedBucketIds] : undefined;
-      const result = await runAction(sessionKey, actionType, ids);
+      const result = await runAction(sessionKey, actionType, ids, prompt);
       setOutputs((prev) => [result, ...prev]);
       setViewing(result);
     } catch (e) {
@@ -63,6 +65,11 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
     } finally {
       setRunning(null);
     }
+  };
+
+  const handleCustomRun = () => {
+    if (!customPrompt.trim()) return;
+    void handleRun("custom", customPrompt.trim());
   };
 
   const noneSelected = selectedBucketIds.size === 0;
@@ -112,6 +119,33 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
             {running === a.id ? `Generating…` : a.label}
           </button>
         ))}
+      </div>
+
+      <div className="action-panel__custom">
+        <div className="action-panel__custom-row">
+          <input
+            type="text"
+            className="action-panel__custom-input"
+            placeholder="Enter a custom prompt… e.g. &quot;Write a Slack standup update&quot;"
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleCustomRun();
+              }
+            }}
+            disabled={running !== null || buckets.length === 0}
+          />
+          <button
+            type="button"
+            className="action-btn action-btn--custom"
+            disabled={running !== null || buckets.length === 0 || !customPrompt.trim()}
+            onClick={handleCustomRun}
+          >
+            {running === "custom" ? "Generating…" : "Generate"}
+          </button>
+        </div>
       </div>
 
       {outputs.length > 0 ? (

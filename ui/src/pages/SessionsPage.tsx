@@ -233,7 +233,7 @@ export function SessionsPage() {
         <section className="panel panel--recording">
           <div className="recording-panel__row">
             <div className="recording-panel__info">
-              <h2 className="session-headline">Recording</h2>
+              <p className="session-headline">Capture</p>
               <div className="session-status-row">
                 <span
                   className={statusDotClass(sessionState, privacyPaused)}

@@ -15,6 +15,7 @@ pub enum ActionType {
     Prd,
     Email,
     Timeline,
+    Custom,
 }
 
 impl ActionType {
@@ -24,6 +25,7 @@ impl ActionType {
             Self::Prd => "prd",
             Self::Email => "email",
             Self::Timeline => "timeline",
+            Self::Custom => "custom",
         }
     }
 
@@ -33,6 +35,7 @@ impl ActionType {
             "prd" => Ok(Self::Prd),
             "email" => Ok(Self::Email),
             "timeline" => Ok(Self::Timeline),
+            "custom" => Ok(Self::Custom),
             other => Err(anyhow!("unknown action type '{other}'")),
         }
     }
@@ -43,6 +46,7 @@ impl ActionType {
             Self::Prd => "PRD",
             Self::Email => "Email draft",
             Self::Timeline => "Timeline",
+            Self::Custom => "Custom",
         }
     }
 }
@@ -106,10 +110,12 @@ Keep it under 300 words. Be factual: only include information from the bucket su
 - Highlight key transitions between different tasks/contexts
 - Add brief context for each activity
 Be factual: only include information from the bucket summaries."#,
+
+        ActionType::Custom => r#"You are a helpful assistant that processes activity session data according to the user's instructions. Use markdown formatting in your output. Be factual: only include information supported by the bucket summaries. Do not invent URLs, names, or data."#,
     }
 }
 
-fn build_action_prompt(buckets: &[ActionBucketInput], action: ActionType) -> String {
+fn build_bucket_block(buckets: &[ActionBucketInput]) -> String {
     let mut parts = Vec::new();
     for b in buckets {
         let apps = b.primary_apps.join(", ");
@@ -147,14 +153,28 @@ fn build_action_prompt(buckets: &[ActionBucketInput], action: ActionType) -> Str
             sources_str,
         ));
     }
+    parts.join("\n\n")
+}
 
+fn build_action_prompt(buckets: &[ActionBucketInput], action: ActionType, custom_prompt: Option<&str>) -> String {
+    let bucket_block = build_bucket_block(buckets);
     let bucket_count = buckets.len();
+
+    if action == ActionType::Custom {
+        let user_instruction = custom_prompt.unwrap_or("Summarize the following session data.");
+        return format!(
+            "User instruction: {user_instruction}\n\n\
+             Here are the {bucket_count} activity bucket(s) to work with:\n\n\
+             ---\n{bucket_block}\n---\n\n\
+             Output the result in markdown. Do not wrap in code fences.",
+        );
+    }
+
     format!(
         "Generate a {} from the following {bucket_count} activity bucket(s).\n\n\
-         ---\n{}\n---\n\n\
+         ---\n{bucket_block}\n---\n\n\
          Output the result in markdown. Do not wrap in code fences.",
         action.label().to_lowercase(),
-        parts.join("\n\n"),
     )
 }
 
@@ -163,6 +183,7 @@ pub fn run_action(
     action: ActionType,
     buckets: &[ActionBucketInput],
     bucket_ids: &[i64],
+    custom_prompt: Option<&str>,
 ) -> Result<ActionOutput> {
     let api_key = std::env::var("OMEGA_GEMINI_API_KEY")
         .map_err(|_| anyhow!("OMEGA_GEMINI_API_KEY not set"))?;
@@ -172,7 +193,7 @@ pub fn run_action(
         .unwrap_or_else(|_| "gemini-2.5-flash-lite".to_string());
 
     let system = system_prompt_for(action);
-    let user_prompt = build_action_prompt(buckets, action);
+    let user_prompt = build_action_prompt(buckets, action, custom_prompt);
     let full_text = format!("{system}\n\n{user_prompt}");
 
     let client = reqwest::blocking::Client::builder()

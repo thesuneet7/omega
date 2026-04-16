@@ -770,6 +770,7 @@ pub fn run_action_command(
     session_key: String,
     action_type_str: String,
     bucket_ids: Option<Vec<i64>>,
+    custom_prompt: Option<String>,
 ) -> Result<ActionOutputRecord, String> {
     let action = ActionType::from_str(&action_type_str).map_err(|e| e.to_string())?;
     let app_db_conn = app_db::open_app_db(&app_db_path()).map_err(|e| e.to_string())?;
@@ -824,7 +825,7 @@ pub fn run_action_command(
     let used_ids: Vec<i64> = selected.iter().map(|b| b.bucket_id).collect();
 
     let output =
-        actions::run_action(&session_key, action, &action_inputs, &used_ids)
+        actions::run_action(&session_key, action, &action_inputs, &used_ids, custom_prompt.as_deref())
             .map_err(|e| format!("action failed: {e:#}"))?;
 
     let id = app_db::insert_action_output(
