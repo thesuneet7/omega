@@ -296,9 +296,10 @@ fn load_generated_summary(db_path: &Path) -> Result<(String, Vec<i64>, Vec<Sessi
     phase4::init_phase4_schema(&conn).context("ensure phase4 schema")?;
     let mut stmt = conn
         .prepare(
-            "SELECT bucket_id, summary_json, generated_at_epoch_secs
-             FROM task_bucket_summaries
-             ORDER BY bucket_id ASC
+            "SELECT s.bucket_id, s.summary_json, s.generated_at_epoch_secs
+             FROM task_bucket_summaries s
+             JOIN task_buckets b ON b.bucket_id = s.bucket_id
+             ORDER BY s.bucket_id ASC
              LIMIT 8",
         )
         .context("prepare task_bucket_summaries query")?;
@@ -453,9 +454,23 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
     if let Some((summary_id, title, body, source_bucket_ids)) =
         app_db::get_summary_row(&app_db, session_key)?
     {
-        // If the cached body is a Phase-4-failure fallback, re-check the phase DB in case
-        // summaries have since been generated (e.g. via a manual re-run or retry).
-        if body_is_fallback(&body) {
+        // Re-check the phase DB when:
+        //  a) the cached body is a Phase-4-failure fallback, OR
+        //  b) the phase DB now has different bucket IDs (pipeline re-ran with refinement/splitting).
+        let should_refresh = body_is_fallback(&body) || {
+            let db = phase_db_path();
+            if db.exists() {
+                load_generated_summary(&db)
+                    .map(|(_, fresh_ids, fresh_buckets)| {
+                        !fresh_buckets.is_empty() && fresh_ids != source_bucket_ids
+                    })
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        };
+
+        if should_refresh {
             let (fresh_body, fresh_ids, fresh_buckets) =
                 load_generated_summary(&phase_db_path())?;
             if !fresh_buckets.is_empty() {

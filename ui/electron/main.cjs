@@ -230,6 +230,15 @@ function registerGlobalPauseShortcut() {
 }
 
 function startOmegaApi() {
+  const { execSync } = require("child_process");
+  try {
+    execSync(`lsof -ti :${API_PORT} | xargs kill -9 2>/dev/null`, {
+      stdio: "ignore",
+    });
+  } catch {
+    /* no stale process on the port — nothing to kill */
+  }
+
   const bin = omegaApiBinary();
   apiChild = spawn(bin, [], {
     cwd: repoRoot(),

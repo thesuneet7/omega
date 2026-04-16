@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -511,9 +512,11 @@ pub fn run_ingestion(config: IngestionConfig) -> Result<(PathBuf, IngestionSumma
     let mut chunks_reused_from_db = 0usize;
     let mut output_chunks: Vec<IngestedChunkItem> = Vec::new();
 
+    let stoplines = build_cross_capture_stoplines(&session.payloads);
+
     for payload in &session.payloads {
         let Phase1Payload::Visual(visual) = payload;
-        let canonical_text = to_canonical_text(visual, &config)?;
+        let canonical_text = to_canonical_text_filtered(visual, &config, &stoplines)?;
         let canonical_hash = sha256_hex(&canonical_text);
         persist_capture(&db, visual, &canonical_text, &canonical_hash)?;
 
@@ -906,8 +909,111 @@ fn latest_capture_log_path(logs_dir: &Path) -> Result<PathBuf> {
     })
 }
 
-fn to_canonical_text(item: &VisualLogItem, config: &IngestionConfig) -> Result<String> {
-    let ocr_raw = normalize_text(&item.ocr_text);
+/// Normalize a line for cross-capture frequency comparison: strip leading bullets/arrows,
+/// trailing ellipsis/truncation artifacts, collapse whitespace, lowercase.
+fn stopline_key(raw: &str) -> String {
+    let t = raw.trim();
+    let t = t.trim_end_matches("...");
+    let t = t.trim_end_matches('…');
+    let t = t.trim_end_matches('v').trim_end_matches('V');
+    let t = t.trim_start_matches(|c: char| !c.is_alphanumeric());
+    t.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Pre-scan all captures to find lines that appear in a high fraction of them — these are
+/// sidebar/navigation chrome and should be stripped before embedding so that the actual content
+/// drives the embedding vector.
+fn build_cross_capture_stoplines(payloads: &[Phase1Payload]) -> HashSet<String> {
+    let total = payloads.len();
+    if total < 2 {
+        return HashSet::new();
+    }
+
+    let mut line_capture_count: HashMap<String, usize> = HashMap::new();
+
+    for payload in payloads {
+        let Phase1Payload::Visual(visual) = payload;
+        let mut seen_in_capture: HashSet<String> = HashSet::new();
+        for raw_line in visual.ocr_text.lines() {
+            let key = stopline_key(raw_line);
+            if key.len() < 3 {
+                continue;
+            }
+            seen_in_capture.insert(key);
+        }
+        for key in seen_in_capture {
+            *line_capture_count.entry(key).or_insert(0) += 1;
+        }
+    }
+
+    let threshold = ((total as f64) * 0.3).ceil() as usize;
+    let min_occurrences = threshold.max(2).min(total);
+
+    let stoplines: HashSet<String> = line_capture_count
+        .into_iter()
+        .filter(|(_, count)| *count >= min_occurrences)
+        .map(|(key, _)| key)
+        .collect();
+
+    if !stoplines.is_empty() {
+        eprintln!(
+            "phase2: cross-capture dedup found {} stopline(s) across {} capture(s) (threshold >= {})",
+            stoplines.len(),
+            total,
+            min_occurrences
+        );
+    }
+
+    stoplines
+}
+
+/// Short lines ending with "..." are truncated navigation/sidebar titles (e.g. Gemini
+/// conversation list), not content sentences. Safe to strip unconditionally.
+fn is_truncated_nav_title(line: &str) -> bool {
+    let t = line.trim();
+    if !(t.ends_with("...") || t.ends_with('…')) {
+        return false;
+    }
+    let core = t
+        .trim_start_matches(|c: char| !c.is_alphanumeric())
+        .trim_end_matches("...")
+        .trim_end_matches('…')
+        .trim();
+    let chars = core.chars().count();
+    chars < 55 && !core.contains('?') && !core.contains('!')
+}
+
+/// Filter out lines whose normalized key matches the stopline set, plus obvious truncated nav titles.
+fn remove_stoplines(text: &str, stoplines: &HashSet<String>) -> String {
+    text.lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return true;
+            }
+            if is_truncated_nav_title(trimmed) {
+                return false;
+            }
+            if stoplines.is_empty() {
+                return true;
+            }
+            let key = stopline_key(line);
+            key.len() < 3 || !stoplines.contains(&key)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn to_canonical_text_filtered(
+    item: &VisualLogItem,
+    config: &IngestionConfig,
+    stoplines: &HashSet<String>,
+) -> Result<String> {
+    let ocr_deduped = remove_stoplines(&item.ocr_text, stoplines);
+    let ocr_raw = normalize_text(&ocr_deduped);
     let ocr_after_pii = if config.redact_pii {
         redact_sensitive_text(&ocr_raw)?
     } else {
@@ -948,6 +1054,11 @@ fn to_canonical_text(item: &VisualLogItem, config: &IngestionConfig) -> Result<S
             ))
         }
     }
+}
+
+#[allow(dead_code)]
+fn to_canonical_text(item: &VisualLogItem, config: &IngestionConfig) -> Result<String> {
+    to_canonical_text_filtered(item, config, &HashSet::new())
 }
 
 /// App-agnostic OCR cleanup: score lines by length / wordiness / sentence shape, drop obvious

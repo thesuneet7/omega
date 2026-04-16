@@ -278,7 +278,7 @@ export function SessionsPage() {
           <section className="panel">
             <p className="empty-hint">Choose a session on the left to open its summary.</p>
           </section>
-        ) : (summary.buckets ?? []).length > 0 ? (
+        ) : selected && (summary.buckets ?? []).length > 0 ? (
           <BucketSummaryWorkspace
             sessionKey={selected.session_key}
             sessionTitle={summary.title}

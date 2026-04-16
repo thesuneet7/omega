@@ -59,6 +59,10 @@ export function ApiUsageMeter({ sessionKey, sessionLabel, refreshToken = 0 }: Pr
 
   const { overall, session } = data;
   const pct = Math.min(100, Math.max(0, overall.usage_percent_of_limit));
+  const estimatedTokenTotal =
+    overall.estimated_embed_tokens +
+    overall.estimated_phase4_input_tokens +
+    overall.estimated_phase4_output_tokens;
 
   return (
     <div className="usage-meter">
@@ -89,8 +93,11 @@ export function ApiUsageMeter({ sessionKey, sessionLabel, refreshToken = 0 }: Pr
       ) : (
         <p className="usage-meter__session muted">Choose a session to see its estimated cost.</p>
       )}
+      <p className="usage-meter__token-total">
+        ~{estimatedTokenTotal.toLocaleString()} tokens estimated (all sessions, this month).
+      </p>
       <details className="usage-meter__details">
-        <summary>Estimated token usage</summary>
+        <summary>Breakdown by step</summary>
         <ul className="usage-meter__stats">
           <li>Embeddings: ~{overall.estimated_embed_tokens.toLocaleString()} tokens</li>
           <li>Summary model (prompt): ~{overall.estimated_phase4_input_tokens.toLocaleString()} tokens</li>

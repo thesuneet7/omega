@@ -632,8 +632,8 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         );
 
-    println!("omega-api listening on http://127.0.0.1:{port}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("omega-api listening on http://127.0.0.1:{port}");
     axum::serve(listener, app).await?;
     Ok(())
 }

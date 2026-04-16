@@ -62,14 +62,33 @@ export function BucketSummaryWorkspace({
   const [bb, setBb] = useState("");
   const [dirty, setDirty] = useState(false);
   const bucketsSigRef = useRef<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const sig = JSON.stringify(initialBuckets);
     if (bucketsSigRef.current === sig) return;
     bucketsSigRef.current = sig;
     setBuckets(initialBuckets);
+    setSelectedIds(new Set());
     setView("home");
   }, [initialBuckets]);
+
+  const toggleSelect = (bucketId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bucketId)) next.delete(bucketId);
+      else next.add(bucketId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === buckets.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(buckets.map((b) => b.bucket_id)));
+    }
+  };
 
   const flushSave = useCallback(
     async (next: SessionBucket[], autosave: boolean) => {
@@ -117,35 +136,69 @@ export function BucketSummaryWorkspace({
     setDirty(false);
   };
 
+  const allSelected = selectedIds.size === buckets.length && buckets.length > 0;
+  const someSelected = selectedIds.size > 0;
+
   if (view === "home") {
     return (
       <>
         <section className="panel">
-          <h2 className="section-title">Session summary</h2>
-          <p className="bucket-session-title">{humanizeSummaryTitle(sessionTitle)}</p>
-          <p className="muted bucket-hint">Open a card to read and edit. Your work saves automatically.</p>
-          <div className="bucket-grid">
-            {buckets.map((b, i) => (
-              <button
-                type="button"
-                key={`${b.bucket_id}-${i}`}
-                className="bucket-card"
-                onClick={() => openBucket(i)}
-              >
-                <span className="bucket-card__title">{b.title || "Untitled"}</span>
-                <span className="bucket-card__excerpt">
-                  {excerpt(bodyPreviewWithoutSourcesBlock(b.body)) || "No content yet."}
-                </span>
-                {b.source_attribution && b.source_attribution.length > 0 ? (
-                  <span className="bucket-card__sources" title={b.source_attribution.map(formatSourceLabel).join("; ")}>
-                    From: {formatSourcesForCard(b.source_attribution)}
-                  </span>
-                ) : null}
+          <div className="bucket-header">
+            <div>
+              <h2 className="section-title">Session summary</h2>
+              <p className="bucket-session-title">{humanizeSummaryTitle(sessionTitle)}</p>
+            </div>
+            {buckets.length > 0 && (
+              <button type="button" className="btn-ghost btn-small" onClick={toggleSelectAll}>
+                {allSelected ? "Deselect all" : "Select all"}
               </button>
-            ))}
+            )}
+          </div>
+          {someSelected && (
+            <p className="bucket-selection-hint">
+              {selectedIds.size} of {buckets.length} selected
+            </p>
+          )}
+          {!someSelected && (
+            <p className="muted bucket-hint">Select cards below, then generate a document. Click a card title to edit.</p>
+          )}
+          <div className="bucket-grid">
+            {buckets.map((b, i) => {
+              const isSelected = selectedIds.has(b.bucket_id);
+              return (
+                <div
+                  key={`${b.bucket_id}-${i}`}
+                  className={`bucket-card${isSelected ? " bucket-card--selected" : ""}`}
+                >
+                  <label className="bucket-card__check" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(b.bucket_id)}
+                    />
+                    <span className="bucket-card__checkmark" />
+                  </label>
+                  <button
+                    type="button"
+                    className="bucket-card__body"
+                    onClick={() => openBucket(i)}
+                  >
+                    <span className="bucket-card__title">{b.title || "Untitled"}</span>
+                    <span className="bucket-card__excerpt">
+                      {excerpt(bodyPreviewWithoutSourcesBlock(b.body)) || "No content yet."}
+                    </span>
+                    {b.source_attribution && b.source_attribution.length > 0 ? (
+                      <span className="bucket-card__sources" title={b.source_attribution.map(formatSourceLabel).join("; ")}>
+                        {formatSourcesForCard(b.source_attribution)}
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </section>
-        <ActionPanel sessionKey={sessionKey} buckets={buckets} />
+        <ActionPanel sessionKey={sessionKey} buckets={buckets} selectedBucketIds={selectedIds} />
         <RevisionHistory revisions={revisions} onRestore={onRestore} />
       </>
     );

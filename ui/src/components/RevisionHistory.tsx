@@ -8,7 +8,7 @@ type Props = {
 
 export function RevisionHistory({ revisions, onRestore }: Props) {
   return (
-    <section className="panel">
+    <section className="panel revision-panel">
       <h2 className="section-title">Past versions</h2>
       {revisions.length === 0 ? (
         <p className="empty-hint empty-hint--below-title">No saved versions yet — edits you save will show up here.</p>

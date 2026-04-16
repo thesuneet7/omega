@@ -11,6 +11,7 @@ import {
 type Props = {
   sessionKey: string;
   buckets: SessionBucket[];
+  selectedBucketIds: Set<number>;
 };
 
 function formatDate(epochSecs: number): string {
@@ -27,7 +28,7 @@ function actionLabel(type: string): string {
   return ACTION_TYPES.find((a) => a.id === type)?.label ?? type;
 }
 
-export function ActionPanel({ sessionKey, buckets }: Props) {
+export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
   const [outputs, setOutputs] = useState<ActionOutputRecord[]>([]);
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +54,8 @@ export function ActionPanel({ sessionKey, buckets }: Props) {
     setRunning(actionType);
     setError(null);
     try {
-      const result = await runAction(sessionKey, actionType);
+      const ids = selectedBucketIds.size > 0 ? [...selectedBucketIds] : undefined;
+      const result = await runAction(sessionKey, actionType, ids);
       setOutputs((prev) => [result, ...prev]);
       setViewing(result);
     } catch (e) {
@@ -62,6 +64,11 @@ export function ActionPanel({ sessionKey, buckets }: Props) {
       setRunning(null);
     }
   };
+
+  const noneSelected = selectedBucketIds.size === 0;
+  const selectionLabel = noneSelected
+    ? "all buckets"
+    : `${selectedBucketIds.size} bucket${selectedBucketIds.size === 1 ? "" : "s"}`;
 
   if (viewing) {
     return (
@@ -72,7 +79,7 @@ export function ActionPanel({ sessionKey, buckets }: Props) {
             className="btn-ghost btn-small"
             onClick={() => setViewing(null)}
           >
-            ← Back to actions
+            ← Back
           </button>
           <span className="action-panel__view-meta">
             {actionLabel(viewing.action_type)} · {formatDate(viewing.generated_at_epoch_secs)}
@@ -89,7 +96,7 @@ export function ActionPanel({ sessionKey, buckets }: Props) {
     <section className="panel action-panel">
       <h2 className="section-title">Actions</h2>
       <p className="muted action-panel__hint">
-        Generate documents from your session's bucket summaries.
+        Generate from {selectionLabel}.{noneSelected ? " Select cards above to narrow scope." : ""}
       </p>
       {error ? <p className="error">{error}</p> : null}
 
@@ -102,7 +109,7 @@ export function ActionPanel({ sessionKey, buckets }: Props) {
             disabled={running !== null || buckets.length === 0}
             onClick={() => void handleRun(a.id)}
           >
-            {running === a.id ? `Generating ${a.label}…` : a.label}
+            {running === a.id ? `Generating…` : a.label}
           </button>
         ))}
       </div>
