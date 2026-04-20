@@ -70,7 +70,27 @@ That means the ideal user has:
 
 ---
 
-### 4. Students
+### 4. Tech corporate employee (individual contributor)
+
+**What's right:**
+
+- The daily context-switching profile is a near-perfect architectural match. An IC at a company like AmEx, JPMorgan, or Google bounces between GitHub, Jira, Confluence, Slack, email, and internal docs all day — multiple sources, no single "home" app, no natural moment of documentation.
+- The pain is real and daily: "What did I actually do today?" is a question most knowledge workers dread at 5pm. Stand-ups, 1:1s, weekly status emails, and async handoffs all require reconstructing a messy day from memory.
+- Use cases multiply quickly: end-of-day summary for next morning's stand-up, quick context-share with a teammate picking up a task, prep for a manager 1:1, input for a performance review cycle, or a personal log for when a past decision gets questioned in a meeting.
+- Frequency of use is extremely high — this is a daily-driver workflow, not an episodic one.
+- Local-first is a particularly strong selling point in regulated industries (finance, healthcare, insurance) where cloud tools that process internal work artifacts carry real compliance risk. A screen-capture agent that never sends data off-device is a harder blocker to object to than a SaaS upload flow.
+
+**What to sharpen:**
+
+- The primary output here is a **work log / daily activity summary**, not a research artifact — a different (though equally valid) JTBD from the consultant's "research session → memo" workflow. Omega should be explicitly tested for whether its summarization pipeline performs on execution-oriented activity (code reviews, ticket triage, Slack threads, PR diffs) as well as it does on browser research sessions.
+- Individual willingness to pay is lower than for consultants. The more realistic monetization path is team or enterprise licensing — a manager buying for an entire eng team once they see the output quality.
+- The "transparent overlay / what to do next" proactive nudge feature is less relevant here. The value proposition is simpler and purer: **passive capture → end-of-day structured summary you didn't have to write.**
+
+**Verdict:** Strong secondary ICP. High frequency of use, strong architectural fit, clear daily pain, and a local-first angle that lands well in enterprise settings. Should be validated alongside the consultant/PM wedge rather than deprioritized.
+
+---
+
+### 5. Students
 
 **What’s right:** High frequency of use, clear workflow alignment, good early-adopter pool for virality.
 
@@ -107,7 +127,15 @@ Two sub-profiles with nearly identical workflow:
 - Strong macOS user base, healthy tool budget.
 - Pain: “I did hours of competitive research and now I face a blank doc.”
 
-Both share the same core job: **turn a messy multi-hour research session into a structured, shareable artifact — automatically.**
+**C. Tech IC / corporate knowledge worker**
+
+- Spends the day jumping across GitHub, Jira, Confluence, Slack, documentation, and internal tools — constant context-switching, rarely pausing to write anything down.
+- Needs a quick daily summary for stand-ups, 1:1s, status updates, and async handoffs with teammates picking up their work.
+- Often works in industries (finance, insurance, healthcare tech) where local-first is not a nice-to-have but a compliance advantage over cloud-based tools.
+- May not pay personally but is a strong candidate for team or enterprise licensing — especially once a manager or tech lead sees the output quality and recognises it solves a team-wide problem, not just an individual one.
+- Pain: "I worked all day and now I have to remember what I did for the stand-up tomorrow — and explain a decision I made three weeks ago in a meeting today."
+
+All three share the same underlying engine: **passive capture of a multi-app session → structured, shareable summary you didn't have to write.** The difference is the session type — research for A and B, execution/work log for C.
 
 ---
 
@@ -128,6 +156,7 @@ That sentence maps capture (multi-source session), stitching (reconstruct), summ
 | Researchers | Low (PDF-first, not screen-first) | Medium | High | No |
 | Consultants / analysts | **High** | **High** | **High** | **Primary** |
 | PMs / UX researchers | High | High | High | Primary (co-equal) |
+| Tech IC / corporate employee | **High** | Medium (individual) / High (team/enterprise) | **Very high (daily)** | Strong secondary |
 | Journalists | Medium | Medium | Medium | Later vertical |
 | Students | Medium | Low | High | Growth channel only |
 
