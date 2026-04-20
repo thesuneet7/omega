@@ -5,13 +5,15 @@ use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::routing::{delete, get, post, put};
 use axum::{extract::State, Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sensor_layer::app_commands;
 use sensor_layer::app_models::{
     ActionOutputRecord, CaptureExclusionsState, DeleteLocalDataResponse, PipelineRunRecord,
     SessionListItem, SessionSummaryState, StorageManifest, SummaryRevision,
 };
 use sensor_layer::capture_live_status::Phase1LiveStatus;
+use sensor_layer::ide_context;
+use sensor_layer::models::{IdeContext, Phase1Payload, VisualLogItem};
 use sensor_layer::usage::ApiUsageResponse;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -86,6 +88,36 @@ struct ActionOutputsQuery {
     session_key: String,
 }
 
+/// Payload pushed by the Omega VS Code / JetBrains extension (or any IDE plugin).
+#[derive(Debug, Deserialize)]
+struct IdeContextPushBody {
+    /// Process/app name as it appears in the OS, e.g. `"Code"`, `"PyCharm"`.
+    #[serde(default)]
+    app_name: String,
+    /// Human-readable IDE name, e.g. `"VS Code"`.
+    #[serde(default)]
+    ide_label: String,
+    #[serde(default)]
+    workspace: Option<String>,
+    #[serde(default)]
+    active_file: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    #[serde(default)]
+    git_branch: Option<String>,
+    /// Visible code text in the editor viewport (optional; may be empty).
+    #[serde(default)]
+    visible_code: Option<String>,
+    /// Current diagnostics / errors from the language server.
+    #[serde(default)]
+    diagnostics: Option<Vec<String>>,
+}
+
+#[derive(Serialize)]
+struct IdeContextPushResponse {
+    queued: bool,
+}
+
 /// Background phase2+phase3 while capture is running (`stop` is shared with the worker thread).
 struct IngestWorkerState {
     stop: Arc<AtomicBool>,
@@ -154,6 +186,8 @@ struct ApiState {
     runtime_start_epoch_secs: u64,
     phase1: Arc<Mutex<Phase1State>>,
     ingest: Arc<Mutex<IngestWorkerState>>,
+    /// IDE context items pushed by the extension; injected into the session file at end_session.
+    ide_queue: Arc<Mutex<Vec<VisualLogItem>>>,
 }
 
 struct Phase1State {
@@ -198,6 +232,30 @@ fn spawn_phase1_capture() -> Result<Child, String> {
     };
     cmd.spawn()
         .map_err(|e| format!("failed to start phase1 capture: {e}"))
+}
+
+/// Reads the JSON session log at `log_path`, appends `items` as `Phase1Payload::Visual`
+/// entries, and re-writes the file. Called at session end to include extension-pushed
+/// IDE context in the phase2 pipeline.
+fn inject_ide_items_into_log(log_path: &PathBuf, items: Vec<VisualLogItem>) -> Result<(), String> {
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct SessionLogFile {
+        session_summary: serde_json::Value,
+        payloads: Vec<Phase1Payload>,
+    }
+
+    let raw = std::fs::read_to_string(log_path)
+        .map_err(|e| format!("ide inject: read log: {e}"))?;
+    let mut log: SessionLogFile = serde_json::from_str(&raw)
+        .map_err(|e| format!("ide inject: parse log: {e}"))?;
+    for item in items {
+        log.payloads.push(Phase1Payload::Visual(item));
+    }
+    let json = serde_json::to_string_pretty(&log)
+        .map_err(|e| format!("ide inject: serialize: {e}"))?;
+    std::fs::write(log_path, json)
+        .map_err(|e| format!("ide inject: write log: {e}"))?;
+    Ok(())
 }
 
 fn ensure_phase1_running(state: &mut Phase1State) -> Result<(), String> {
@@ -506,6 +564,14 @@ async fn end_session(
     }
     let _ = app_commands::reset_phase1_live_status();
 
+    // Drain IDE context items before handing off to the blocking pipeline.
+    let ide_items: Vec<VisualLogItem> = state
+        .ide_queue
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .drain(..)
+        .collect();
+
     let ingest = Arc::clone(&state.ingest);
     let runtime_secs = state.runtime_start_epoch_secs;
     let summary = tokio::task::spawn_blocking(move || -> Result<String, String> {
@@ -520,6 +586,12 @@ async fn end_session(
             "No runtime capture log found yet. Let phase1 run and interact, then end the session."
                 .to_string()
         })?;
+
+        // Merge any queued IDE context items into the capture file so phase2 sees them.
+        if !ide_items.is_empty() {
+            inject_ide_items_into_log(&latest_log, ide_items)?;
+        }
+
         let session_key = latest_log
             .file_stem()
             .and_then(|s| s.to_str())
@@ -553,6 +625,93 @@ async fn end_session(
     })?;
 
     Ok(Json(FetchSummaryResponse { summary }))
+}
+
+/// Receives structured IDE context from the Omega extension.
+/// Builds a synthetic `VisualLogItem` and queues it for injection into the
+/// session file at `end_session` time, so it participates in phase2-4 like any
+/// other capture.
+async fn post_ide_context(
+    State(state): State<ApiState>,
+    Json(body): Json<IdeContextPushBody>,
+) -> Result<Json<IdeContextPushResponse>, (StatusCode, String)> {
+    // Build a descriptive OCR-like text from whatever the extension provided.
+    let mut text_parts: Vec<String> = Vec::new();
+    if let Some(ref file) = body.active_file {
+        text_parts.push(format!("File: {file}"));
+    }
+    if let Some(ref lang) = body.language {
+        text_parts.push(format!("Language: {lang}"));
+    }
+    if let Some(ref branch) = body.git_branch {
+        text_parts.push(format!("Branch: {branch}"));
+    }
+    if let Some(ref code) = body.visible_code {
+        if !code.trim().is_empty() {
+            text_parts.push(format!("---\n{}", code.trim()));
+        }
+    }
+    if let Some(ref diags) = body.diagnostics {
+        if !diags.is_empty() {
+            text_parts.push(format!("Diagnostics:\n{}", diags.join("\n")));
+        }
+    }
+    let ocr_text = if text_parts.is_empty() {
+        "[ide-context: no content]".to_string()
+    } else {
+        text_parts.join("\n")
+    };
+
+    let app_name = if body.app_name.is_empty() {
+        body.ide_label.clone()
+    } else {
+        body.app_name.clone()
+    };
+    let window_title = body
+        .active_file
+        .as_deref()
+        .map(|f| {
+            if let Some(ref ws) = body.workspace {
+                format!("{f} \u{2014} {ws}")
+            } else {
+                f.to_string()
+            }
+        })
+        .unwrap_or_default();
+
+    // Resolve git branch: use the pushed value if present, else try to detect it.
+    let git_branch = body.git_branch.clone().or_else(|| {
+        body.workspace.as_deref().and_then(ide_context::get_git_branch)
+    });
+
+    let ide_ctx = IdeContext {
+        active_file: body.active_file.clone(),
+        workspace: body.workspace.clone(),
+        language: body.language.clone(),
+        git_branch,
+        workspace_path: body.workspace.clone(),
+    };
+
+    let item = VisualLogItem {
+        id: now_epoch_secs(),
+        timestamp: SystemTime::now(),
+        app_name,
+        window_title,
+        event_type: "ide-context-push".to_string(),
+        width: 0,
+        height: 0,
+        ocr_engine_used: "ide-extension".to_string(),
+        ocr_text,
+        ide_context: Some(ide_ctx),
+    };
+
+    state
+        .ide_queue
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .push(item);
+
+    Ok(Json(IdeContextPushResponse { queued: true }))
 }
 
 async fn run_action(
@@ -603,6 +762,7 @@ async fn main() -> anyhow::Result<()> {
         runtime_start_epoch_secs,
         phase1: Arc::new(Mutex::new(phase1_state)),
         ingest: Arc::new(Mutex::new(IngestWorkerState::default())),
+        ide_queue: Arc::new(Mutex::new(Vec::new())),
     };
 
     let app = Router::new()
@@ -627,6 +787,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/fetch-summary", post(fetch_summary))
         .route("/api/action/run", post(run_action))
         .route("/api/action/outputs", get(list_action_outputs))
+        .route("/api/ide-context", post(post_ide_context))
         .with_state(shared_state)
         .layer(
             CorsLayer::new()

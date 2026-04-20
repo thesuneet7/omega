@@ -759,6 +759,17 @@ CREATE TABLE IF NOT EXISTS captures (
     canonical_text TEXT NOT NULL,
     created_at_epoch_secs INTEGER NOT NULL
 );
+"#,
+    )
+    .context("failed creating sqlite schema")?;
+
+    // Non-destructive migrations: add IDE columns if this is an older DB.
+    // SQLite returns "duplicate column name" when the column exists; we ignore that.
+    let _ = conn.execute("ALTER TABLE captures ADD COLUMN git_branch TEXT", []);
+    let _ = conn.execute("ALTER TABLE captures ADD COLUMN active_file TEXT", []);
+
+    conn.execute_batch(
+        r#"
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_hash TEXT PRIMARY KEY,
@@ -794,9 +805,14 @@ fn persist_capture(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
+    let git_branch  = visual.ide_context.as_ref().and_then(|c| c.git_branch.clone());
+    let active_file = visual.ide_context.as_ref().and_then(|c| c.active_file.clone());
     conn.execute(
-        "INSERT OR IGNORE INTO captures (canonical_hash, source_visual_id, timestamp_epoch_secs, app_name, window_title, event_type, ocr_engine_used, canonical_text, created_at_epoch_secs)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT OR IGNORE INTO captures
+         (canonical_hash, source_visual_id, timestamp_epoch_secs, app_name, window_title,
+          event_type, ocr_engine_used, canonical_text, created_at_epoch_secs,
+          git_branch, active_file)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             canonical_hash,
             visual.id as i64,
@@ -806,7 +822,9 @@ fn persist_capture(
             visual.event_type,
             visual.ocr_engine_used,
             canonical_text,
-            now_epoch_secs() as i64
+            now_epoch_secs() as i64,
+            git_branch,
+            active_file,
         ],
     )
     .context("failed to persist capture")?;

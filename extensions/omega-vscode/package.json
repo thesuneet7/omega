@@ -1,0 +1,43 @@
+{
+  "name": "omega-ide-context",
+  "displayName": "Omega IDE Context",
+  "description": "Sends structured code context to the local Omega capture engine so your coding sessions are included in daily summaries.",
+  "version": "0.1.0",
+  "publisher": "omega",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Omega",
+      "properties": {
+        "omega.apiPort": {
+          "type": "number",
+          "default": 17421,
+          "description": "Port that the local Omega API server listens on."
+        },
+        "omega.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable Omega IDE context capture."
+        },
+        "omega.sendVisibleCode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include the visible code in the viewport when sending context. Disable if you work with sensitive code."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

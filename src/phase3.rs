@@ -77,6 +77,8 @@ struct CandidateChunk {
     canonical_hash: String,
     timestamp_epoch_secs: i64,
     embedding: Vec<f32>,
+    /// Git branch at the time of capture, if available.
+    git_branch: Option<String>,
 }
 
 #[derive(Debug)]
@@ -85,6 +87,9 @@ struct BucketState {
     centroid: Vec<f32>,
     item_count: i64,
     last_active_epoch_secs: i64,
+    /// Known git branches for chunks already assigned to this bucket.
+    /// Used to enforce hard separation between different branches.
+    known_git_branches: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -166,6 +171,7 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
             chunk.timestamp_epoch_secs,
             config.decay_lambda,
             config.active_window_mins,
+            chunk.git_branch.as_deref(),
         );
         let assigned_bucket_id = match best {
             Some((idx, score)) if score >= config.match_threshold => {
@@ -181,11 +187,16 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
             }
             _ => {
                 let new_bucket_id = create_bucket(&conn, chunk)?;
+                let mut known_git_branches = std::collections::HashSet::new();
+                if let Some(ref b) = chunk.git_branch {
+                    known_git_branches.insert(b.clone());
+                }
                 let bucket = BucketState {
                     bucket_id: new_bucket_id,
                     centroid: chunk.embedding.clone(),
                     item_count: 1,
                     last_active_epoch_secs: chunk.timestamp_epoch_secs,
+                    known_git_branches,
                 };
                 buckets.push(bucket);
                 insert_assignment(&conn, new_bucket_id, chunk, 1.0, true)?;
@@ -296,7 +307,8 @@ fn load_candidate_chunks(
     embed_model: &str,
 ) -> Result<Vec<CandidateChunk>> {
     let mut stmt = conn.prepare(
-        "SELECT c.chunk_hash, c.canonical_hash, cap.timestamp_epoch_secs, e.embedding_json
+        "SELECT c.chunk_hash, c.canonical_hash, cap.timestamp_epoch_secs,
+                e.embedding_json, cap.git_branch
          FROM chunks c
          JOIN captures cap ON cap.canonical_hash = c.canonical_hash
          JOIN embeddings e ON e.chunk_hash = c.chunk_hash
@@ -319,6 +331,7 @@ fn load_candidate_chunks(
             canonical_hash: row.get(1)?,
             timestamp_epoch_secs: row.get(2)?,
             embedding,
+            git_branch: row.get(4)?,
         })
     })?;
     let mut out = Vec::new();
@@ -359,12 +372,32 @@ fn load_bucket_states(conn: &Connection) -> Result<Vec<BucketState>> {
             centroid,
             item_count: row.get(2)?,
             last_active_epoch_secs: row.get(3)?,
+            known_git_branches: std::collections::HashSet::new(),
         })
     })?;
     let mut out = Vec::new();
     for row in rows {
         out.push(row.context("failed to parse task bucket row")?);
     }
+
+    // Populate known_git_branches for each existing bucket from the DB.
+    for bucket in &mut out {
+        let mut bstmt = conn.prepare(
+            "SELECT DISTINCT cap.git_branch
+             FROM task_bucket_items tbi
+             JOIN chunks c ON c.chunk_hash = tbi.chunk_hash
+             JOIN captures cap ON cap.canonical_hash = c.canonical_hash
+             WHERE tbi.bucket_id = ?1
+               AND cap.git_branch IS NOT NULL",
+        )?;
+        let branch_rows = bstmt.query_map(params![bucket.bucket_id], |row| {
+            row.get::<_, String>(0)
+        })?;
+        for b in branch_rows {
+            bucket.known_git_branches.insert(b.context("git branch row")?);
+        }
+    }
+
     Ok(out)
 }
 
@@ -374,6 +407,7 @@ fn find_best_bucket_match(
     chunk_ts: i64,
     decay_lambda: f64,
     active_window_mins: u64,
+    chunk_git_branch: Option<&str>,
 ) -> Option<(usize, f32)> {
     let mut best: Option<(usize, f32)> = None;
     let max_age_secs = (active_window_mins.saturating_mul(60)) as i64;
@@ -382,6 +416,17 @@ fn find_best_bucket_match(
         if max_age_secs > 0 && delta > max_age_secs {
             continue;
         }
+
+        // Hard split: if both the chunk and the bucket have known git branches
+        // and none of the bucket's branches match the chunk's branch, skip.
+        if let Some(branch) = chunk_git_branch {
+            if !bucket.known_git_branches.is_empty()
+                && !bucket.known_git_branches.contains(branch)
+            {
+                continue;
+            }
+        }
+
         let sim = cosine_similarity(embedding, &bucket.centroid).unwrap_or(0.0);
         let decay = (-(decay_lambda * delta as f64)).exp() as f32;
         let score = sim * decay;
@@ -402,6 +447,9 @@ fn assign_to_bucket(
     _active_window_mins: u64,
     max_centroid_weight: usize,
 ) -> Result<i64> {
+    if let Some(ref b) = chunk.git_branch {
+        bucket.known_git_branches.insert(b.clone());
+    }
     if bucket.centroid.len() != chunk.embedding.len() {
         return Err(anyhow!(
             "embedding dim mismatch for bucket {}: {} vs {}",
@@ -531,6 +579,7 @@ struct RefinementItem {
     timestamp_epoch_secs: i64,
     embedding: Vec<f32>,
     bucket_id: i64,
+    git_branch: Option<String>,
 }
 
 fn load_refinement_items(
@@ -540,9 +589,10 @@ fn load_refinement_items(
 ) -> Result<Vec<RefinementItem>> {
     let mut stmt = conn.prepare(
         "SELECT tbi.chunk_hash, tbi.canonical_hash, tbi.source_timestamp_epoch_secs,
-                e.embedding_json, tbi.bucket_id
+                e.embedding_json, tbi.bucket_id, cap.git_branch
          FROM task_bucket_items tbi
          JOIN embeddings e ON e.chunk_hash = tbi.chunk_hash
+         JOIN captures cap ON cap.canonical_hash = tbi.canonical_hash
          WHERE e.task_type = 'RETRIEVAL_DOCUMENT'
            AND e.backend = ?1
            AND e.model = ?2
@@ -559,6 +609,7 @@ fn load_refinement_items(
             timestamp_epoch_secs: row.get(2)?,
             embedding,
             bucket_id: row.get(4)?,
+            git_branch: row.get(5)?,
         })
     })?;
     let mut out = Vec::new();
@@ -568,10 +619,22 @@ fn load_refinement_items(
     Ok(out)
 }
 
-/// Split any bucket whose minimum internal pairwise similarity is below `match_threshold`.
-/// Uses the two most dissimilar chunks as seeds and assigns the rest to their nearest seed
-/// (divisive clustering). Repeats until all buckets are cohesive or too small to split.
+/// Split a bucket only when it is genuinely bimodal — i.e. the **median** pairwise
+/// similarity is below `match_threshold` AND a substantial fraction of pairs are
+/// below threshold. Using the median (rather than the min) prevents a single noisy
+/// OCR chunk from shattering an otherwise coherent bucket into many small ones.
+/// When a split is warranted, the two most dissimilar chunks seed the sub-buckets.
 fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) -> usize {
+    // Require this fraction of pairwise similarities to be below threshold before
+    // splitting. Low fractions (single outlier pairs) are ignored.
+    const FRACTION_BELOW_CUTOFF: f32 = 0.30;
+    // Require at least this many items in a bucket before it is eligible to split.
+    // 3 is too small — 1 outlier in a 3-item bucket flips the split trigger.
+    const MIN_ITEMS_FOR_SPLIT: usize = 5;
+    // Splitting only triggers when the median sim is below this margin from threshold,
+    // so clusters that are only marginally below the bar are left intact.
+    const MEDIAN_MARGIN: f32 = 0.04;
+
     let mut total_changes = 0usize;
     let mut max_bucket_id = items.iter().map(|i| i.bucket_id).max().unwrap_or(0);
 
@@ -584,10 +647,11 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
         let mut did_split = false;
 
         for (&_bid, indices) in &bucket_indices {
-            if indices.len() < 3 {
+            if indices.len() < MIN_ITEMS_FOR_SPLIT {
                 continue;
             }
 
+            let mut sims: Vec<f32> = Vec::with_capacity(indices.len() * (indices.len() - 1) / 2);
             let mut min_sim = f32::MAX;
             let mut seed_a = indices[0];
             let mut seed_b = indices[1];
@@ -599,6 +663,7 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
                         &items[indices[j]].embedding,
                     )
                     .unwrap_or(0.0);
+                    sims.push(sim);
                     if sim < min_sim {
                         min_sim = sim;
                         seed_a = indices[i];
@@ -607,7 +672,17 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
                 }
             }
 
-            if min_sim >= match_threshold {
+            // Compute median (O(n log n) sort — n is quadratic in items, but buckets are small).
+            sims.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+            let median_sim = sims[sims.len() / 2];
+
+            let below_count = sims.iter().filter(|&&s| s < match_threshold).count();
+            let fraction_below = below_count as f32 / sims.len() as f32;
+
+            // Only split if the bucket is genuinely fractured, not just noisy.
+            if median_sim >= match_threshold - MEDIAN_MARGIN
+                || fraction_below < FRACTION_BELOW_CUTOFF
+            {
                 continue;
             }
 
@@ -616,8 +691,12 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
             let keep_id = items[seed_a].bucket_id;
 
             eprintln!(
-                "phase3: splitting bucket (min pairwise sim {:.4}, threshold {:.4}, {} items) → 2 sub-buckets",
-                min_sim, match_threshold, indices.len()
+                "phase3: splitting bucket (median sim {:.4}, min sim {:.4}, {:.0}% pairs below threshold {:.4}, {} items) → 2 sub-buckets",
+                median_sim,
+                min_sim,
+                fraction_below * 100.0,
+                match_threshold,
+                indices.len()
             );
 
             items[seed_b].bucket_id = new_id;
@@ -652,6 +731,92 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
     total_changes
 }
 
+/// Merge any pair of buckets whose centroids are at least `match_threshold` similar.
+/// Respects git-branch hard splits: two buckets with disjoint non-empty branch sets
+/// are never merged, even if their centroids match. Runs iteratively until no more
+/// merges are possible. Returns the number of (item-level) bucket-id changes.
+fn merge_near_duplicate_buckets(items: &mut [RefinementItem], match_threshold: f32) -> usize {
+    let mut total_changes = 0usize;
+
+    loop {
+        // Group items by current bucket id and compute each bucket's centroid + branch set.
+        let mut grouped: HashMap<i64, Vec<usize>> = HashMap::new();
+        for (idx, item) in items.iter().enumerate() {
+            grouped.entry(item.bucket_id).or_default().push(idx);
+        }
+        if grouped.len() < 2 {
+            return total_changes;
+        }
+
+        let dim = items[0].embedding.len();
+        let mut bucket_ids: Vec<i64> = grouped.keys().copied().collect();
+        bucket_ids.sort_unstable();
+
+        let mut centroids: HashMap<i64, Vec<f32>> = HashMap::new();
+        let mut branch_sets: HashMap<i64, std::collections::HashSet<String>> = HashMap::new();
+        for &bid in &bucket_ids {
+            let indices = &grouped[&bid];
+            let mut c = vec![0.0f32; dim];
+            let mut branches = std::collections::HashSet::new();
+            for &i in indices {
+                for (k, v) in items[i].embedding.iter().enumerate() {
+                    c[k] += v;
+                }
+                if let Some(ref b) = items[i].git_branch {
+                    branches.insert(b.clone());
+                }
+            }
+            let n = indices.len() as f32;
+            for v in c.iter_mut() { *v /= n; }
+            l2_normalize(&mut c);
+            centroids.insert(bid, c);
+            branch_sets.insert(bid, branches);
+        }
+
+        // Find the single best merge candidate (highest centroid similarity above threshold)
+        // and merge it in this iteration. Repeat until no candidates remain.
+        let mut best: Option<(i64, i64, f32)> = None;
+        for i in 0..bucket_ids.len() {
+            for j in (i + 1)..bucket_ids.len() {
+                let a = bucket_ids[i];
+                let b = bucket_ids[j];
+
+                // Git-branch hard split: if both sides have branches and none overlap, skip.
+                let ba = &branch_sets[&a];
+                let bb = &branch_sets[&b];
+                if !ba.is_empty() && !bb.is_empty() && ba.is_disjoint(bb) {
+                    continue;
+                }
+
+                let sim = cosine_similarity(&centroids[&a], &centroids[&b]).unwrap_or(0.0);
+                if sim < match_threshold {
+                    continue;
+                }
+                match best {
+                    Some((_, _, s)) if sim <= s => {}
+                    _ => best = Some((a, b, sim)),
+                }
+            }
+        }
+
+        match best {
+            Some((keep, drop, sim)) => {
+                eprintln!(
+                    "phase3: merging bucket {} into {} (centroid sim {:.4} ≥ threshold {:.4})",
+                    drop, keep, sim, match_threshold
+                );
+                for item in items.iter_mut() {
+                    if item.bucket_id == drop {
+                        item.bucket_id = keep;
+                        total_changes += 1;
+                    }
+                }
+            }
+            None => return total_changes,
+        }
+    }
+}
+
 /// Two-phase refinement:
 /// 1. **Cohesion split**: any bucket with min pairwise similarity below threshold gets divided
 ///    using the two most dissimilar chunks as seeds (handles N topics, not just 2).
@@ -679,6 +844,12 @@ fn run_refinement(
     let dim = items[0].embedding.len();
     let mut total_reassignments = split_changes;
     let mut rounds_run = 0usize;
+
+    // Pre-merge: if the online-assignment phase (or a previous refinement) left behind
+    // near-duplicate buckets, collapse them before k-means refinement so the centroids
+    // we iterate on are not redundant.
+    let pre_merge_changes = merge_near_duplicate_buckets(&mut items, match_threshold);
+    total_reassignments += pre_merge_changes;
 
     for round in 0..max_rounds {
         rounds_run += 1;
@@ -750,6 +921,19 @@ fn run_refinement(
             break;
         }
     }
+
+    // Post-merge: after k-means has stabilized, some buckets may have centroids that
+    // converged close to each other (e.g. near-duplicate OCR captures that the splitter
+    // separated on noise). Collapse those now — this is the fix for "two buckets with
+    // exactly the same content" showing up in the summary.
+    let post_merge_changes = merge_near_duplicate_buckets(&mut items, match_threshold);
+    if post_merge_changes > 0 {
+        eprintln!(
+            "phase3: post-refinement merge collapsed {} item assignment(s)",
+            post_merge_changes
+        );
+    }
+    total_reassignments += post_merge_changes;
 
     if total_reassignments == 0 {
         return Ok((rounds_run, 0));

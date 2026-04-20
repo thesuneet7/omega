@@ -1,9 +1,10 @@
+mod capture_live_status;
+mod ide_context;
 mod models;
 mod openai_compat_url;
 mod phase2;
 mod phase3;
 mod phase4;
-mod capture_live_status;
 mod phash;
 mod privacy_config;
 mod sensor;

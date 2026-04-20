@@ -1,4 +1,5 @@
 use crate::capture_live_status;
+use crate::ide_context;
 use crate::models::{Phase1Payload, VisualLogItem};
 use crate::phash::{compute_phash, similarity};
 use crate::privacy_config;
@@ -283,6 +284,7 @@ impl SensorEngine {
 
         let (w, h) = screenshot.dimensions();
         let (ocr_engine_used, ocr_text) = self.extract_ocr_text_with_engine(&screenshot);
+        let ide_context = ide_context::parse_ide_context(&app_name, &window_title);
         let visual = VisualLogItem {
             id: self.next_id(),
             timestamp: SystemTime::now(),
@@ -293,6 +295,7 @@ impl SensorEngine {
             height: h,
             ocr_engine_used,
             ocr_text,
+            ide_context,
         };
 
         self.phase2_queue.push(Phase1Payload::Visual(visual));

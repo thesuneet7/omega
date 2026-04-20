@@ -13,7 +13,7 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Bump when the prompt or output schema changes materially (stored in DB + JSON artifact).
-pub const PROMPT_VERSION: &str = "phase4-v2";
+pub const PROMPT_VERSION: &str = "phase4-v3";
 
 /// Capture metadata pair stored on bucket summaries (same JSON shape as `app_models::SourceAttribution`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -407,6 +407,14 @@ struct BucketRow {
     bucket_id: i64,
 }
 
+/// One entry in the cross-app activity timeline prepended to the Phase 4 prompt.
+struct TimelineEntry {
+    timestamp_epoch_secs: i64,
+    app_name: String,
+    active_file: Option<String>,
+    git_branch: Option<String>,
+}
+
 struct AggregatedBucket {
     chunk_hashes: Vec<String>,
     distinct_apps: Vec<String>,
@@ -414,6 +422,8 @@ struct AggregatedBucket {
     prompt_body: String,
     first_seen_epoch_secs: Option<u64>,
     last_seen_epoch_secs: Option<u64>,
+    /// Ordered, deduplicated sequence of app+file+branch transitions in this bucket.
+    timeline: Vec<TimelineEntry>,
 }
 
 /// Distinct (app, window title) pairs for chunks assigned to this bucket (capture metadata).
@@ -469,7 +479,8 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
     }
 
     let mut stmt = conn.prepare(
-        r#"SELECT c.chunk_text, c.chunk_index, cap.app_name, cap.window_title, cap.timestamp_epoch_secs
+        r#"SELECT c.chunk_text, c.chunk_index, cap.app_name, cap.window_title,
+                  cap.timestamp_epoch_secs, cap.active_file, cap.git_branch
            FROM task_bucket_items tbi
            JOIN chunks c ON c.chunk_hash = tbi.chunk_hash
            JOIN captures cap ON cap.canonical_hash = c.canonical_hash
@@ -483,6 +494,8 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
             row.get::<_, String>(2)?,
             row.get::<_, String>(3)?,
             row.get::<_, i64>(4)?,
+            row.get::<_, Option<String>>(5)?,
+            row.get::<_, Option<String>>(6)?,
         ))
     })?;
 
@@ -492,20 +505,51 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
         std::collections::BTreeSet::new();
     let mut ts_min: Option<i64> = None;
     let mut ts_max: Option<i64> = None;
+    // Raw timeline events before deduplication.
+    let mut raw_timeline: Vec<TimelineEntry> = Vec::new();
 
     for row in rows {
-        let (text, _idx, app, window, ts) = row.context("aggregate row")?;
+        let (text, _idx, app, window, ts, active_file, git_branch) =
+            row.context("aggregate row")?;
         apps.insert(app.clone());
         ts_min = Some(ts_min.map_or(ts, |m| m.min(ts)));
         ts_max = Some(ts_max.map_or(ts, |m| m.max(ts)));
+
+        let file_label = active_file
+            .as_deref()
+            .map(|f| format!(" [{f}]"))
+            .unwrap_or_default();
+        let branch_label = git_branch
+            .as_deref()
+            .map(|b| format!(" (branch: {b})"))
+            .unwrap_or_default();
         parts.push(format!(
-            "### segment (app={app}, window={window}, ts={ts})\n{}",
+            "### segment (app={app}{file_label}{branch_label}, window={window}, ts={ts})\n{}",
             text.trim()
         ));
         source_keys.insert(BucketSourceRef {
-            app_name: app,
+            app_name: app.clone(),
             window_title: window,
         });
+        raw_timeline.push(TimelineEntry {
+            timestamp_epoch_secs: ts,
+            app_name: app,
+            active_file,
+            git_branch,
+        });
+    }
+
+    // Deduplicate consecutive entries with the same (app, file, branch) triple.
+    let mut timeline: Vec<TimelineEntry> = Vec::new();
+    for entry in raw_timeline {
+        let is_duplicate = timeline.last().map_or(false, |prev: &TimelineEntry| {
+            prev.app_name == entry.app_name
+                && prev.active_file == entry.active_file
+                && prev.git_branch == entry.git_branch
+        });
+        if !is_duplicate {
+            timeline.push(entry);
+        }
     }
 
     let prompt_body = parts.join("\n\n");
@@ -519,6 +563,7 @@ fn aggregate_bucket(conn: &Connection, bucket_id: i64) -> Result<AggregatedBucke
         prompt_body,
         first_seen_epoch_secs: ts_min.map(|t| t as u64),
         last_seen_epoch_secs: ts_max.map(|t| t as u64),
+        timeline,
     })
 }
 
@@ -540,6 +585,28 @@ fn build_prompt_body(agg: &AggregatedBucket, max_chars: usize) -> (String, bool)
         ),
         true,
     )
+}
+
+fn format_timeline(timeline: &[TimelineEntry]) -> String {
+    if timeline.is_empty() {
+        return String::new();
+    }
+    let mut lines: Vec<String> = Vec::with_capacity(timeline.len());
+    for entry in timeline {
+        // Format epoch as HH:MM UTC for readability.
+        let secs = entry.timestamp_epoch_secs as u64;
+        let hh = (secs / 3600) % 24;
+        let mm = (secs / 60) % 60;
+        let mut parts = vec![format!("[{hh:02}:{mm:02}] {}", entry.app_name)];
+        if let Some(ref f) = entry.active_file {
+            parts.push(format!("— {f}"));
+        }
+        if let Some(ref b) = entry.git_branch {
+            parts.push(format!("(branch: {b})"));
+        }
+        lines.push(parts.join(" "));
+    }
+    lines.join("\n")
 }
 
 fn build_user_prompt(agg: &AggregatedBucket, body: &str, truncated: bool) -> String {
@@ -566,12 +633,20 @@ fn build_user_prompt(agg: &AggregatedBucket, body: &str, truncated: bool) -> Str
         (Some(a), Some(b)) => format!("time range (epoch seconds, inclusive): {a} .. {b}"),
         _ => "time range: unknown".to_string(),
     };
+    let timeline_section = if agg.timeline.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Activity timeline (app switches, deduped):\n{}\n\n",
+            format_timeline(&agg.timeline)
+        )
+    };
     format!(
         r#"You summarize one "task bucket" from an on-device activity log (OCR from screenshots). The owner opted in; content may include work or personal context. Be faithful to the text: do not invent URLs, product names, numbers, or steps that are not supported by the OCR. Prefer completeness over brevity for important material.
 
 {tw}
 Apps seen in this bucket: {apps}
-Distinct windows/titles (from capture metadata; use only to understand context — do not invent additional titles): {windows_preview}
+{timeline_section}Distinct windows/titles (from capture metadata; use only to understand context — do not invent additional titles): {windows_preview}
 Segments truncated for model limits: {trunc}
 
 OCR segments (chronological):

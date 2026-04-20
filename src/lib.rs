@@ -3,6 +3,7 @@ pub mod app_commands;
 pub mod app_db;
 pub mod app_models;
 pub mod capture_live_status;
+pub mod ide_context;
 pub mod models;
 pub mod openai_compat_url;
 pub mod phase2;
