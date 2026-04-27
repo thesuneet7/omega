@@ -23,6 +23,9 @@ pub struct StitchConfig {
     pub max_centroid_weight: usize,
     /// Number of k-means-style refinement rounds after the initial online pass.
     pub refinement_rounds: usize,
+    /// Whether to collapse near-duplicate buckets during refinement.
+    /// Disabled by default because aggressive merges can collapse valid task splits.
+    pub merge_near_duplicates: bool,
 }
 
 impl StitchConfig {
@@ -54,6 +57,10 @@ impl StitchConfig {
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
             .unwrap_or(3);
+        let merge_near_duplicates = std::env::var("OMEGA_PHASE3_MERGE_NEAR_DUPLICATES")
+            .ok()
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+            .unwrap_or(false);
         let backend = EmbeddingBackend::from_env()?;
         let embedding_backend = backend.as_str().to_string();
         let embed_model = crate::phase2::resolve_embed_model_for_backend(&backend)?;
@@ -67,6 +74,7 @@ impl StitchConfig {
             embed_model,
             max_centroid_weight,
             refinement_rounds,
+            merge_near_duplicates,
         })
     }
 }
@@ -108,6 +116,7 @@ pub struct StitchSummary {
     pub active_window_mins: u64,
     pub max_centroid_weight: usize,
     pub refinement_rounds_config: usize,
+    pub merge_near_duplicates: bool,
     pub refinement_rounds_run: usize,
     pub refinement_reassignments: usize,
 }
@@ -214,6 +223,7 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
         &conn,
         config.match_threshold,
         config.refinement_rounds,
+        config.merge_near_duplicates,
         &embedding_backend,
         &embed_model,
     )?;
@@ -243,6 +253,7 @@ pub fn run_stitching(config: StitchConfig) -> Result<PathBuf> {
             active_window_mins: config.active_window_mins,
             max_centroid_weight: config.max_centroid_weight,
             refinement_rounds_config: config.refinement_rounds,
+            merge_near_duplicates: config.merge_near_duplicates,
             refinement_rounds_run,
             refinement_reassignments,
         },
@@ -731,11 +742,11 @@ fn split_incoherent_buckets(items: &mut [RefinementItem], match_threshold: f32) 
     total_changes
 }
 
-/// Merge any pair of buckets whose centroids are at least `match_threshold` similar.
+/// Merge any pair of buckets whose centroids are at least `merge_threshold` similar.
 /// Respects git-branch hard splits: two buckets with disjoint non-empty branch sets
 /// are never merged, even if their centroids match. Runs iteratively until no more
 /// merges are possible. Returns the number of (item-level) bucket-id changes.
-fn merge_near_duplicate_buckets(items: &mut [RefinementItem], match_threshold: f32) -> usize {
+fn merge_near_duplicate_buckets(items: &mut [RefinementItem], merge_threshold: f32) -> usize {
     let mut total_changes = 0usize;
 
     loop {
@@ -789,7 +800,7 @@ fn merge_near_duplicate_buckets(items: &mut [RefinementItem], match_threshold: f
                 }
 
                 let sim = cosine_similarity(&centroids[&a], &centroids[&b]).unwrap_or(0.0);
-                if sim < match_threshold {
+                if sim < merge_threshold {
                     continue;
                 }
                 match best {
@@ -802,8 +813,8 @@ fn merge_near_duplicate_buckets(items: &mut [RefinementItem], match_threshold: f
         match best {
             Some((keep, drop, sim)) => {
                 eprintln!(
-                    "phase3: merging bucket {} into {} (centroid sim {:.4} ≥ threshold {:.4})",
-                    drop, keep, sim, match_threshold
+                    "phase3: merging bucket {} into {} (centroid sim {:.4} ≥ merge threshold {:.4})",
+                    drop, keep, sim, merge_threshold
                 );
                 for item in items.iter_mut() {
                     if item.bucket_id == drop {
@@ -827,6 +838,7 @@ fn run_refinement(
     conn: &Connection,
     match_threshold: f32,
     max_rounds: usize,
+    merge_near_duplicates: bool,
     embedding_backend: &str,
     embed_model: &str,
 ) -> Result<(usize, usize)> {
@@ -844,12 +856,17 @@ fn run_refinement(
     let dim = items[0].embedding.len();
     let mut total_reassignments = split_changes;
     let mut rounds_run = 0usize;
+    // Keep duplicate-collapse intentionally stricter than assignment.
+    // Using the same threshold here can over-merge semantically distinct buckets.
+    let merge_threshold = (match_threshold + 0.08).min(0.98);
 
     // Pre-merge: if the online-assignment phase (or a previous refinement) left behind
     // near-duplicate buckets, collapse them before k-means refinement so the centroids
     // we iterate on are not redundant.
-    let pre_merge_changes = merge_near_duplicate_buckets(&mut items, match_threshold);
-    total_reassignments += pre_merge_changes;
+    if merge_near_duplicates {
+        let pre_merge_changes = merge_near_duplicate_buckets(&mut items, merge_threshold);
+        total_reassignments += pre_merge_changes;
+    }
 
     for round in 0..max_rounds {
         rounds_run += 1;
@@ -926,14 +943,16 @@ fn run_refinement(
     // converged close to each other (e.g. near-duplicate OCR captures that the splitter
     // separated on noise). Collapse those now — this is the fix for "two buckets with
     // exactly the same content" showing up in the summary.
-    let post_merge_changes = merge_near_duplicate_buckets(&mut items, match_threshold);
-    if post_merge_changes > 0 {
-        eprintln!(
-            "phase3: post-refinement merge collapsed {} item assignment(s)",
-            post_merge_changes
-        );
+    if merge_near_duplicates {
+        let post_merge_changes = merge_near_duplicate_buckets(&mut items, merge_threshold);
+        if post_merge_changes > 0 {
+            eprintln!(
+                "phase3: post-refinement merge collapsed {} item assignment(s)",
+                post_merge_changes
+            );
+        }
+        total_reassignments += post_merge_changes;
     }
-    total_reassignments += post_merge_changes;
 
     if total_reassignments == 0 {
         return Ok((rounds_run, 0));
