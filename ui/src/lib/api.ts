@@ -247,6 +247,7 @@ export type ActionOutputRecord = {
 };
 
 export const ACTION_TYPES = [
+  { id: "stakeholder_brief", label: "Stakeholder brief" },
   { id: "report", label: "Report" },
   { id: "prd", label: "PRD" },
   { id: "email", label: "Email draft" },

@@ -449,15 +449,46 @@ fn body_is_fallback(body: &str) -> bool {
     body.trim().starts_with(FALLBACK_MARKER)
 }
 
+fn latest_session_key_in_logs() -> Option<String> {
+    collect_session_files(&logs_dir())
+        .ok()
+        .and_then(|files| files.into_iter().next())
+        .and_then(|p| p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
+}
+
+fn session_summary_placeholder(session_key: &str) -> String {
+    let path = logs_dir().join(format!("{session_key}.json"));
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return "No generated summary is saved for this session yet.".to_string();
+    };
+    let Ok(parsed) = serde_json::from_str::<CaptureSessionFile>(&raw) else {
+        return "No generated summary is saved for this session yet.".to_string();
+    };
+    format!(
+        "## Session snapshot\n\n\
+         This session does not have a persisted generated summary yet.\n\n\
+         - Accepted captures: {}\n\
+         - Total events seen: {}\n\
+         - Duration: {} seconds\n\n\
+         Open this session right after ending capture to generate and save bucket summaries for it.",
+        parsed.session_summary.accepted_captures,
+        parsed.session_summary.total_events_seen,
+        parsed.session_summary.session_duration_secs
+    )
+}
+
 fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
     let app_db = app_db::open_app_db(&app_db_path())?;
+    let is_latest_session = latest_session_key_in_logs()
+        .map(|k| k == session_key)
+        .unwrap_or(false);
     if let Some((summary_id, title, body, source_bucket_ids)) =
         app_db::get_summary_row(&app_db, session_key)?
     {
         // Re-check the phase DB when:
         //  a) the cached body is a Phase-4-failure fallback, OR
         //  b) the phase DB now has different bucket IDs (pipeline re-ran with refinement/splitting).
-        let should_refresh = body_is_fallback(&body) || {
+        let should_refresh = body_is_fallback(&body) || (is_latest_session && {
             let db = phase_db_path();
             if db.exists() {
                 load_generated_summary(&db)
@@ -468,7 +499,7 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
             } else {
                 false
             }
-        };
+        });
 
         if should_refresh {
             let (fresh_body, fresh_ids, fresh_buckets) =
@@ -512,8 +543,16 @@ fn load_summary_state_impl(session_key: &str) -> Result<SessionSummaryState> {
         });
     }
 
-    let (generated_body, source_bucket_ids, buckets) = load_generated_summary(&phase_db_path())?;
-    let generated_title = "Untitled session".to_string();
+    let (generated_body, source_bucket_ids, buckets) = if is_latest_session {
+        load_generated_summary(&phase_db_path())?
+    } else {
+        (session_summary_placeholder(session_key), Vec::new(), Vec::new())
+    };
+    let generated_title = if is_latest_session {
+        "Untitled session".to_string()
+    } else {
+        "Session snapshot".to_string()
+    };
     let summary_id = app_db::upsert_current_summary(
         &app_db,
         session_key,
@@ -801,7 +840,7 @@ pub fn run_action_command(
         .iter()
         .map(|b| {
             let phase_db = phase_db_path();
-            let (tags, primary_apps, one_liner, detailed_summary) =
+            let (tags, primary_apps, one_liner, detailed_summary, source_refs) =
                 load_bucket_detail_from_phase_db(&phase_db, b.bucket_id);
             ActionBucketInput {
                 bucket_id: b.bucket_id,
@@ -810,14 +849,21 @@ pub fn run_action_command(
                 detailed_summary,
                 tags,
                 primary_apps,
-                source_attribution: b
-                    .source_attribution
-                    .iter()
-                    .map(|s| ActionSourceRef {
-                        app_name: s.app_name.clone(),
-                        window_title: s.window_title.clone(),
-                    })
-                    .collect(),
+                source_attribution: if source_refs.is_empty() {
+                    b.source_attribution
+                        .iter()
+                        .map(|s| ActionSourceRef {
+                            app_name: s.app_name.clone(),
+                            window_title: s.window_title.clone(),
+                            origin: format!("capture-window:{}", s.window_title),
+                            timestamp_epoch_secs: None,
+                            snippet: s.window_title.clone(),
+                            confidence: "Medium".to_string(),
+                        })
+                        .collect()
+                } else {
+                    source_refs
+                },
             }
         })
         .collect();
@@ -858,8 +904,14 @@ pub fn list_action_outputs(session_key: String) -> Result<Vec<ActionOutputRecord
 fn load_bucket_detail_from_phase_db(
     db_path: &std::path::Path,
     bucket_id: i64,
-) -> (Vec<String>, Vec<String>, String, String) {
-    let empty = (Vec::new(), Vec::new(), String::new(), String::new());
+) -> (Vec<String>, Vec<String>, String, String, Vec<ActionSourceRef>) {
+    let empty = (
+        Vec::new(),
+        Vec::new(),
+        String::new(),
+        String::new(),
+        Vec::new(),
+    );
     let Ok(conn) = rusqlite::Connection::open(db_path) else {
         return empty;
     };
@@ -902,5 +954,88 @@ fn load_bucket_detail_from_phase_db(
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    (tags, primary_apps, one_liner, detailed_summary)
+    let mut source_refs: Vec<ActionSourceRef> = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT DISTINCT cap.app_name, cap.window_title, cap.timestamp_epoch_secs, c.chunk_text, c.canonical_hash, c.chunk_index
+         FROM task_bucket_items tbi
+         JOIN chunks c ON c.chunk_hash = tbi.chunk_hash
+         JOIN captures cap ON cap.canonical_hash = c.canonical_hash
+         WHERE tbi.bucket_id = ?1
+         ORDER BY cap.timestamp_epoch_secs ASC, c.chunk_index ASC
+         LIMIT 24",
+    ) {
+        if let Ok(rows) = stmt.query_map(rusqlite::params![bucket_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        }) {
+            let mut seen = std::collections::HashSet::new();
+            for (i, item) in rows.enumerate() {
+                let Ok((app_name, window_title, ts, chunk_text, canonical_hash, chunk_index)) = item else {
+                    continue;
+                };
+                if is_low_signal_window_title(&window_title) {
+                    continue;
+                }
+                let snippet = chunk_text
+                    .split_whitespace()
+                    .take(18)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .to_string();
+                if snippet.len() < 20 {
+                    continue;
+                }
+                let key = format!(
+                    "{}|{}|{}|{}",
+                    app_name.to_lowercase(),
+                    window_title.to_lowercase(),
+                    ts,
+                    snippet.to_lowercase()
+                );
+                if !seen.insert(key) {
+                    continue;
+                }
+                source_refs.push(ActionSourceRef {
+                    app_name,
+                    window_title,
+                    origin: format!("capture:{canonical_hash}#chunk:{chunk_index}"),
+                    timestamp_epoch_secs: Some(ts),
+                    snippet,
+                    confidence: if i < 6 {
+                        "High".to_string()
+                    } else if i < 14 {
+                        "Medium".to_string()
+                    } else {
+                        "Low".to_string()
+                    },
+                });
+            }
+        }
+    }
+
+    (tags, primary_apps, one_liner, detailed_summary, source_refs)
+}
+
+fn is_low_signal_window_title(title: &str) -> bool {
+    let t = title.trim().to_ascii_lowercase();
+    if t.is_empty() {
+        return true;
+    }
+    let noisy = [
+        "new tab",
+        "blank page",
+        "untitled",
+        "dashboard",
+        "home",
+        "notification",
+        "settings",
+    ];
+    noisy.iter().any(|n| t == *n || t.starts_with(&format!("{n} ")))
 }

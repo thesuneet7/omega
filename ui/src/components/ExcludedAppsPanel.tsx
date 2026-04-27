@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getCaptureExclusions, setCaptureExclusions } from "../lib/api";
 
+const PROTECTED_APP_NAMES = new Set(["electron", "omega", "omega session app"]);
+
 export function ExcludedAppsPanel() {
   const [names, setNames] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
@@ -41,6 +43,10 @@ export function ExcludedAppsPanel() {
   const handleAdd = useCallback(() => {
     const t = draft.trim();
     if (!t) return;
+    if (PROTECTED_APP_NAMES.has(t.toLowerCase())) {
+      setError(`'${t}' cannot be excluded because it would block Omega capture.`);
+      return;
+    }
     setDraft("");
     const lower = new Set(names.map((n) => n.toLowerCase()));
     if (lower.has(t.toLowerCase())) return;

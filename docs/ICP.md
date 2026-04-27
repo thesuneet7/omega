@@ -167,3 +167,92 @@ The differentiated “transparent on-screen what to do next” idea is strongest
 *Living document — align with Phase 0 in ROADMAP and revise as the wedge is validated.*
 
 **See also:** [GTM — first region, channels, and how to approach customers](GTM_REGION_CHANNELS_AND_FIRST_CUSTOMERS.md) (operationalizes geography, buyer motion, and distribution vs. this ICP).
+
+---
+
+## PM ICP card (execution-ready)
+
+Use this card to keep PM-focused discovery and roadmap decisions grounded in one concrete user, one recurring trigger, and one first deliverable.
+
+### Persona
+
+**Role:** Mid-level product manager (or PM-adjacent UXR/Product Ops) at a startup or mid-size product company.
+
+**Environment:** macOS-heavy, remote-first or hybrid, works across Slack, Jira, Confluence/Notion, Figma, dashboards, docs, and call notes.
+
+**Reality:** Runs 2-4 hours of fragmented research/alignment work, then has to produce a clear stakeholder narrative fast.
+
+### Core job to be done
+
+"Help me turn scattered product context into a send-ready stakeholder update or decision brief in about 10 minutes, without losing evidence."
+
+### Daily problems (high-frequency pain)
+
+- Context is split across too many tools and tabs.
+- Decisions lose traceability ("why did we choose this?" becomes hard to answer later).
+- Stakeholder updates require repeated manual reconstruction.
+- Ambiguous inputs must be converted into crisp requirements and action owners.
+- End-of-day/week reporting consumes high cognitive load.
+
+### Recurring trigger events
+
+- Weekly product status update due.
+- Stakeholder asks "what changed and why?" before a review.
+- PM needs to justify a prioritization decision.
+- Team needs a pre-read before planning/retro.
+
+### First deliverable to nail (P0)
+
+**Deliverable:** Weekly stakeholder brief (send-ready).
+
+**Why this first:** High frequency, obvious value, easy quality judgment, and directly tied to retention ("I use Omega before every update").
+
+### Deliverable structure (default template)
+
+1. **What changed this week** (3-5 bullets)
+2. **Decisions made and rationale** (each claim citation-linked)
+3. **Progress vs plan** (on track/off track with reasons)
+4. **Top risks/blockers** (owner + mitigation)
+5. **Next 7 days** (commitments and asks)
+6. **Evidence appendix** (E1, E2, E3... with source metadata)
+
+### Citation and trust rules for PM outputs
+
+- Every non-obvious claim must have at least one evidence reference.
+- Citation should include source app, exact origin (URL/ticket/message), timestamp, and supporting snippet.
+- If evidence is weak/missing, mark item as **Assumption** instead of **Fact**.
+- Show confidence level per claim (High/Medium/Low).
+
+### Product scope for PM wedge (what to build now vs later)
+
+**Now:**
+- One-click "Stakeholder Brief" mode.
+- Source-locked citations and evidence appendix.
+- Strong filtering/deduping for noisy activity.
+- Re-open context loop: click citation -> jump to original source.
+
+**Later:**
+- Broader role packs and team taxonomy layers.
+- Advanced overlays and proactive suggestion systems.
+- Expansion workflows for tech IC daily logs.
+
+### Success metrics (pilot scorecard)
+
+- Median time from "generate" to send-ready brief.
+- Percent of output claims with evidence references.
+- User trust score ("I would forward this without heavy edits").
+- Weekly active usage tied to real update rituals.
+- Edit distance from generated draft to final sent version.
+
+### Interview and validation prompts
+
+- "Walk me through the last weekly update you sent. How long did reconstruction take?"
+- "Which parts of this generated brief would you delete or rewrite first?"
+- "Would you forward this to leadership as-is? If not, what blocks trust?"
+- "What missing evidence would you need to defend this in a review?"
+
+### Anti-goals for this ICP phase
+
+- Do not optimize for "generic personal summary" positioning.
+- Do not broaden messaging to students/general productivity users.
+- Do not prioritize team-wide rollout before single-user trust is stable.

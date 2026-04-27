@@ -3,7 +3,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::Response;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -11,6 +13,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionType {
+    StakeholderBrief,
     Report,
     Prd,
     Email,
@@ -21,6 +24,7 @@ pub enum ActionType {
 impl ActionType {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::StakeholderBrief => "stakeholder_brief",
             Self::Report => "report",
             Self::Prd => "prd",
             Self::Email => "email",
@@ -31,6 +35,7 @@ impl ActionType {
 
     pub fn from_str(s: &str) -> Result<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
+            "stakeholder_brief" | "stakeholder-brief" | "brief" => Ok(Self::StakeholderBrief),
             "report" => Ok(Self::Report),
             "prd" => Ok(Self::Prd),
             "email" => Ok(Self::Email),
@@ -42,6 +47,7 @@ impl ActionType {
 
     pub fn label(&self) -> &'static str {
         match self {
+            Self::StakeholderBrief => "Stakeholder brief",
             Self::Report => "Report",
             Self::Prd => "PRD",
             Self::Email => "Email draft",
@@ -67,6 +73,10 @@ pub struct ActionBucketInput {
 pub struct ActionSourceRef {
     pub app_name: String,
     pub window_title: String,
+    pub origin: String,
+    pub timestamp_epoch_secs: Option<i64>,
+    pub snippet: String,
+    pub confidence: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +91,20 @@ pub struct ActionOutput {
 
 fn system_prompt_for(action: ActionType) -> &'static str {
     match action {
+        ActionType::StakeholderBrief => r#"You produce a send-ready stakeholder brief with strict trust controls.
+Always output these sections in this exact order:
+## What changed
+## Decisions and rationale
+## Progress vs plan
+## Risks/blockers
+## Next steps and asks
+
+Rules:
+- Every non-trivial claim must include at least one citation marker like [E1], [E2].
+- If a claim has no citation, explicitly label it as Assumption.
+- Prefix each claim line with a confidence label: [High], [Medium], or [Low].
+- Keep claims concise and verifiable.
+- Never invent URLs, ticket IDs, or source details."#,
         ActionType::Report => r#"You produce a well-structured professional report from activity session data. Write in second person ("you"). Use markdown formatting with clear headings, bullet points, and sections. The report should have:
 - An executive summary (2-3 sentences)
 - Key activities section with details
@@ -124,11 +148,30 @@ fn build_bucket_block(buckets: &[ActionBucketInput]) -> String {
             .source_attribution
             .iter()
             .map(|s| {
-                if s.window_title.is_empty() {
-                    s.app_name.clone()
+                let window = if s.window_title.is_empty() {
+                    String::new()
                 } else {
-                    format!("{} — {}", s.app_name, s.window_title)
-                }
+                    format!(" — {}", s.window_title)
+                };
+                let origin = if s.origin.is_empty() {
+                    "unknown-origin".to_string()
+                } else {
+                    s.origin.clone()
+                };
+                let snippet = if s.snippet.is_empty() {
+                    "n/a".to_string()
+                } else {
+                    s.snippet.clone()
+                };
+                let confidence = if s.confidence.is_empty() {
+                    "Medium".to_string()
+                } else {
+                    s.confidence.clone()
+                };
+                format!(
+                    "{}{} | origin={} | confidence={} | snippet={}",
+                    s.app_name, window, origin, confidence, snippet
+                )
             })
             .collect();
         let sources_str = if sources.is_empty() {
@@ -159,6 +202,15 @@ fn build_bucket_block(buckets: &[ActionBucketInput]) -> String {
 fn build_action_prompt(buckets: &[ActionBucketInput], action: ActionType, custom_prompt: Option<&str>) -> String {
     let bucket_block = build_bucket_block(buckets);
     let bucket_count = buckets.len();
+    if action == ActionType::StakeholderBrief {
+        let window_note = custom_prompt.unwrap_or("Use full selected session window.");
+        return format!(
+            "Create a stakeholder brief from the following {bucket_count} activity bucket(s).\n\
+             Time window preference: {window_note}\n\n\
+             ---\n{bucket_block}\n---\n\n\
+             Output the result in markdown. Do not wrap in code fences.",
+        );
+    }
 
     if action == ActionType::Custom {
         let user_instruction = custom_prompt.unwrap_or("Summarize the following session data.");
@@ -176,6 +228,176 @@ fn build_action_prompt(buckets: &[ActionBucketInput], action: ActionType, custom
          Output the result in markdown. Do not wrap in code fences.",
         action.label().to_lowercase(),
     )
+}
+
+fn evidence_regex() -> Regex {
+    Regex::new(r"\[E\d+\]").expect("compile evidence regex")
+}
+
+fn confidence_regex() -> Regex {
+    Regex::new(r"^\s*(?:[-*]\s+)?\[(High|Medium|Low)\]\s+").expect("compile confidence regex")
+}
+
+fn is_structural_line(t: &str) -> bool {
+    t.is_empty()
+        || t.starts_with('#')
+        || t.starts_with("---")
+        || t == "Evidence Appendix"
+        || t == "## Evidence Appendix"
+}
+
+fn should_treat_as_claim(t: &str) -> bool {
+    if is_structural_line(t) {
+        return false;
+    }
+    let raw = t.trim_start_matches(['-', '*', ' ']).trim();
+    raw.len() >= 24
+}
+
+fn confidence_for_refs(ref_ids: &[usize], by_id: &HashMap<usize, ActionSourceRef>) -> &'static str {
+    if ref_ids.iter().any(|id| {
+        by_id.get(id)
+            .map(|r| r.confidence.eq_ignore_ascii_case("high"))
+            .unwrap_or(false)
+    }) {
+        "High"
+    } else if ref_ids.iter().any(|id| {
+        by_id.get(id)
+            .map(|r| r.confidence.eq_ignore_ascii_case("low"))
+            .unwrap_or(false)
+    }) {
+        "Low"
+    } else {
+        "Medium"
+    }
+}
+
+fn dedupe_sources(buckets: &[ActionBucketInput]) -> Vec<ActionSourceRef> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<ActionSourceRef> = Vec::new();
+    for b in buckets {
+        for s in &b.source_attribution {
+            let key = format!(
+                "{}|{}|{}|{}",
+                s.app_name.trim().to_lowercase(),
+                s.origin.trim().to_lowercase(),
+                s.timestamp_epoch_secs.unwrap_or_default(),
+                s.snippet.trim().to_lowercase()
+            );
+            if seen.insert(key) {
+                out.push(s.clone());
+            }
+        }
+    }
+    out
+}
+
+fn append_evidence_appendix(markdown: &str, evidence: &[ActionSourceRef]) -> String {
+    let mut out = String::new();
+    out.push_str(markdown.trim_end());
+    out.push_str("\n\n## Evidence Appendix\n");
+    if evidence.is_empty() {
+        out.push_str("\n- [E1] source app: Unknown\n  - origin: unknown-origin\n  - timestamp: unknown\n  - snippet: No source metadata available\n  - confidence: Low\n");
+        return out;
+    }
+    for (idx, ev) in evidence.iter().enumerate() {
+        let label = idx + 1;
+        let ts = ev
+            .timestamp_epoch_secs
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let origin = if ev.origin.is_empty() {
+            "unknown-origin"
+        } else {
+            ev.origin.as_str()
+        };
+        let snippet = if ev.snippet.is_empty() {
+            "n/a"
+        } else {
+            ev.snippet.as_str()
+        };
+        let confidence = if ev.confidence.is_empty() {
+            "Medium"
+        } else {
+            ev.confidence.as_str()
+        };
+        out.push_str(&format!(
+            "\n- [E{label}] source app: {}\n  - origin: {origin}\n  - timestamp: {ts}\n  - snippet: {snippet}\n  - confidence: {confidence}\n",
+            ev.app_name
+        ));
+    }
+    out
+}
+
+fn enforce_evidence_lock(markdown: &str, buckets: &[ActionBucketInput]) -> String {
+    let refs = dedupe_sources(buckets);
+    let evidence_re = evidence_regex();
+    let confidence_re = confidence_regex();
+    let by_id: HashMap<usize, ActionSourceRef> = refs
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (i + 1, r.clone()))
+        .collect();
+    let default_ref = if refs.is_empty() { 1 } else { 1 };
+    let mut next_ref: usize = 1;
+
+    let mut lines_out: Vec<String> = Vec::new();
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if is_structural_line(trimmed) {
+            lines_out.push(line.to_string());
+            continue;
+        }
+        if !should_treat_as_claim(trimmed) {
+            lines_out.push(line.to_string());
+            continue;
+        }
+        let ids: Vec<usize> = evidence_re
+            .find_iter(line)
+            .filter_map(|m| {
+                m.as_str()
+                    .trim_start_matches("[E")
+                    .trim_end_matches(']')
+                    .parse::<usize>()
+                    .ok()
+            })
+            .collect();
+
+        let mut updated = line.to_string();
+        if ids.is_empty() {
+            let ref_id = if refs.is_empty() {
+                default_ref
+            } else {
+                let id = next_ref.min(refs.len());
+                next_ref += 1;
+                id
+            };
+            updated = format!("{updated} [E{ref_id}] (Assumption)");
+        }
+        if !confidence_re.is_match(&updated) {
+            let ids2: Vec<usize> = evidence_re
+                .find_iter(&updated)
+                .filter_map(|m| {
+                    m.as_str()
+                        .trim_start_matches("[E")
+                        .trim_end_matches(']')
+                        .parse::<usize>()
+                        .ok()
+                })
+                .collect();
+            let conf = confidence_for_refs(&ids2, &by_id);
+            let prefix = if updated.trim_start().starts_with("- ") {
+                "- "
+            } else {
+                ""
+            };
+            let content = updated.trim_start_matches("- ").trim_start();
+            updated = format!("{prefix}[{conf}] {content}");
+        }
+        lines_out.push(updated);
+    }
+
+    append_evidence_appendix(&lines_out.join("\n"), &refs)
 }
 
 pub fn run_action(
@@ -255,6 +477,12 @@ pub fn run_action(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
+
+    let output_body = if action == ActionType::StakeholderBrief {
+        enforce_evidence_lock(&output_body, buckets)
+    } else {
+        output_body
+    };
 
     Ok(ActionOutput {
         session_key: session_key.to_string(),

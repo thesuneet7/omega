@@ -35,6 +35,9 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ActionOutputRecord | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
+  const [briefWindow, setBriefWindow] = useState<"session" | "last24h" | "thisWeek">("session");
+  const [hideLowConfidence, setHideLowConfidence] = useState(false);
+  const [showEvidencedOnly, setShowEvidencedOnly] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -49,6 +52,8 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
     void refresh();
     setViewing(null);
     setError(null);
+    setHideLowConfidence(false);
+    setShowEvidencedOnly(false);
   }, [refresh]);
 
   const handleRun = async (actionType: ActionTypeId, prompt?: string) => {
@@ -57,7 +62,15 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
     setError(null);
     try {
       const ids = selectedBucketIds.size > 0 ? [...selectedBucketIds] : undefined;
-      const result = await runAction(sessionKey, actionType, ids, prompt);
+      const stakeholderPrompt =
+        actionType === "stakeholder_brief"
+          ? briefWindow === "last24h"
+            ? "Use the last 24 hours of captured context."
+            : briefWindow === "thisWeek"
+              ? "Use this week of captured context."
+              : "Use the selected session window."
+          : prompt;
+      const result = await runAction(sessionKey, actionType, ids, stakeholderPrompt);
       setOutputs((prev) => [result, ...prev]);
       setViewing(result);
     } catch (e) {
@@ -78,6 +91,11 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
     : `${selectedBucketIds.size} bucket${selectedBucketIds.size === 1 ? "" : "s"}`;
 
   if (viewing) {
+    const evidenceItems = parseEvidenceAppendix(viewing.output_body);
+    const filtered = filterMarkdownForTrust(viewing.output_body, {
+      hideLowConfidence,
+      showEvidencedOnly,
+    });
     return (
       <section className="panel action-panel">
         <div className="action-panel__toolbar">
@@ -93,7 +111,44 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
           </span>
         </div>
         <div className="action-panel__output-body">
-          <ActionMarkdown text={viewing.output_body} />
+          <div className="action-panel__trust-controls">
+            <label className="action-panel__toggle">
+              <input
+                type="checkbox"
+                checked={hideLowConfidence}
+                onChange={(e) => setHideLowConfidence(e.target.checked)}
+              />
+              Hide low-confidence claims
+            </label>
+            <label className="action-panel__toggle">
+              <input
+                type="checkbox"
+                checked={showEvidencedOnly}
+                onChange={(e) => setShowEvidencedOnly(e.target.checked)}
+              />
+              Show only directly evidenced claims
+            </label>
+          </div>
+          <ActionMarkdown text={filtered} />
+          {evidenceItems.length > 0 ? (
+            <section className="action-evidence-panel">
+              <h3 className="action-evidence-panel__title">Evidence panel</h3>
+              <div className="action-evidence-panel__list">
+                {evidenceItems.map((item) => (
+                  <article key={item.id} id={`evidence-${item.id}`} className="action-evidence-item">
+                    <div className="action-evidence-item__top">
+                      <span className="action-evidence-item__badge">[E{item.id}]</span>
+                      <span className="action-evidence-item__confidence">{item.confidence}</span>
+                    </div>
+                    <p><strong>Source app:</strong> {item.sourceApp}</p>
+                    <p><strong>Origin:</strong> {item.origin}</p>
+                    <p><strong>Timestamp:</strong> {item.timestamp}</p>
+                    <p><strong>Snippet:</strong> {item.snippet}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       </section>
     );
@@ -112,13 +167,29 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
           <button
             key={a.id}
             type="button"
-            className="action-btn"
+            className={`action-btn${a.id === "stakeholder_brief" ? " action-btn--primary" : ""}`}
             disabled={running !== null || buckets.length === 0}
             onClick={() => void handleRun(a.id)}
           >
             {running === a.id ? `Generating…` : a.label}
           </button>
         ))}
+      </div>
+      <div className="action-panel__window">
+        <label className="action-panel__window-label" htmlFor="brief-window">
+          Stakeholder brief time window
+        </label>
+        <select
+          id="brief-window"
+          className="action-panel__window-select"
+          value={briefWindow}
+          onChange={(e) => setBriefWindow(e.target.value as "session" | "last24h" | "thisWeek")}
+          disabled={running !== null || buckets.length === 0}
+        >
+          <option value="session">Selected session</option>
+          <option value="last24h">Last 24 hours</option>
+          <option value="thisWeek">This week</option>
+        </select>
       </div>
 
       <div className="action-panel__custom">
@@ -224,7 +295,71 @@ function markdownToHtml(md: string): string {
 
 function applyInline(text: string): string {
   return text
+    .replace(/\[E(\d+)\]/g, `<a href="#evidence-$1" class="action-citation">[E$1]</a>`)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
+type EvidenceItem = {
+  id: number;
+  sourceApp: string;
+  origin: string;
+  timestamp: string;
+  snippet: string;
+  confidence: string;
+};
+
+function parseEvidenceAppendix(markdown: string): EvidenceItem[] {
+  const appendixIdx = markdown.indexOf("## Evidence Appendix");
+  if (appendixIdx < 0) return [];
+  const lines = markdown.slice(appendixIdx).split("\n");
+  const out: EvidenceItem[] = [];
+  let current: EvidenceItem | null = null;
+
+  for (const line of lines) {
+    const head = line.match(/^- \[E(\d+)\] source app:\s*(.+)$/);
+    if (head) {
+      if (current) out.push(current);
+      current = {
+        id: Number(head[1]),
+        sourceApp: head[2].trim(),
+        origin: "unknown-origin",
+        timestamp: "unknown",
+        snippet: "n/a",
+        confidence: "Medium",
+      };
+      continue;
+    }
+    if (!current) continue;
+    const t = line.trim();
+    if (t.startsWith("- origin:")) current.origin = t.replace("- origin:", "").trim();
+    else if (t.startsWith("- timestamp:")) current.timestamp = t.replace("- timestamp:", "").trim();
+    else if (t.startsWith("- snippet:")) current.snippet = t.replace("- snippet:", "").trim();
+    else if (t.startsWith("- confidence:")) current.confidence = t.replace("- confidence:", "").trim();
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function filterMarkdownForTrust(
+  markdown: string,
+  opts: { hideLowConfidence: boolean; showEvidencedOnly: boolean }
+): string {
+  const appendixIdx = markdown.indexOf("## Evidence Appendix");
+  const main = appendixIdx >= 0 ? markdown.slice(0, appendixIdx) : markdown;
+  const appendix = appendixIdx >= 0 ? markdown.slice(appendixIdx) : "";
+  const filtered = main
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (t === "" || t.startsWith("#")) return true;
+      if (opts.hideLowConfidence && t.includes("[Low]")) return false;
+      if (opts.showEvidencedOnly && !/\[E\d+\]/.test(t)) return false;
+      return true;
+    })
+    .join("\n")
+    .trimEnd();
+  if (!appendix) return filtered;
+  return `${filtered}\n\n${appendix.trim()}`;
 }
