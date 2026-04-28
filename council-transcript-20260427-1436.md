@@ -8,7 +8,7 @@ Please run the council on this project. Read all docs, especially features and h
 
 ## Framed Question
 
-Should Omega become a genuinely high-demand product for PMs, consultants, tech workforce users, or other audiences — and will usage become hooked or merely reluctant? What specific product and positioning changes maximize real demand?
+Should Omega become a genuinely high-demand product fodeliveryr PMs, consultants, tech workforce users, or other audiences — and will usage become hooked or merely reluctant? What specific product and positioning changes maximize real demand?
 
 ## Advisor Responses
 
@@ -113,6 +113,7 @@ Outcome: strong demand and hooked use with disciplined wedge execution; reluctan
 ## Chairman Synthesis
 
 ## Where the Council Agrees
+
 - Omega will not become high-demand with broad passive-capture positioning.
 - Deliverable engine framing is essential.
 - Wedge audience should be consultants/analysts + PM/UXR.
@@ -120,16 +121,19 @@ Outcome: strong demand and hooked use with disciplined wedge execution; reluctan
 - Trust rails (citations, confidence, filtering) should precede overlays.
 
 ## Where the Council Clashes
+
 - Whether tech IC should be near-term target (frequency upside) or later expansion (lower individual WTP).
 - Whether to add team/template layers early (compounding value) or only after trust loop is stable.
 
 ## Blind Spots the Council Caught
+
 - Distribution and buying motion lacked detail.
 - Pricing/packaging decisions are underdefined.
 - Retention instrumentation beyond first win needs explicit design.
 - Defensibility needs planned workflow lock-in, not just features.
 
 ## The Recommendation
+
 Build and position Omega as a trusted evidence-to-deliverable engine for consultants/analysts and PM/UXR first. Promise: “From work exhaust to send-ready narrative in 10 minutes, with receipts.”
 
 Prioritize role-specific output modes and source-locked trust mechanics. Deprioritize broad “for everyone” messaging and generic summary value props. Gate overlays until trust is consistently high.
@@ -137,4 +141,5 @@ Prioritize role-specific output modes and source-locked trust mechanics. Deprior
 This path maximizes odds of “hooked” usage. Broad passive positioning leads to reluctant, episodic use.
 
 ## The One Thing to Do First
+
 Ship one 10-minute client/stakeholder brief workflow with locked citations and make it the full onboarding demo.

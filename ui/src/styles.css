@@ -1062,6 +1062,11 @@ button:disabled {
 .action-panel__output-body { padding: 4px 0; }
 .action-panel__trust-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 10px; }
 .action-panel__toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
+.action-panel__trust-warning {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--yellow);
+}
 
 .action-citation {
   color: var(--yellow);
@@ -1069,6 +1074,10 @@ button:disabled {
   font-weight: 600;
 }
 .action-citation:hover { text-decoration: underline; }
+.action-citation--dangling {
+  color: var(--danger);
+  text-decoration: underline dotted;
+}
 
 .action-evidence-panel {
   margin-top: 16px;
@@ -1084,6 +1093,11 @@ button:disabled {
   letter-spacing: 0.04em;
 }
 .action-evidence-panel__list { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.action-evidence-panel__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 .action-evidence-item {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);

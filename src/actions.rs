@@ -238,6 +238,10 @@ fn confidence_regex() -> Regex {
     Regex::new(r"^\s*(?:[-*]\s+)?\[(High|Medium|Low)\]\s+").expect("compile confidence regex")
 }
 
+fn whitespace_regex() -> Regex {
+    Regex::new(r"\s+").expect("compile whitespace regex")
+}
+
 fn is_structural_line(t: &str) -> bool {
     t.is_empty()
         || t.starts_with('#')
@@ -251,7 +255,64 @@ fn should_treat_as_claim(t: &str) -> bool {
         return false;
     }
     let raw = t.trim_start_matches(['-', '*', ' ']).trim();
-    raw.len() >= 24
+    raw.len() >= 18
+}
+
+fn normalize_confidence(s: &str) -> &'static str {
+    let t = s.trim().to_ascii_lowercase();
+    if t == "high" {
+        "High"
+    } else if t == "low" {
+        "Low"
+    } else {
+        "Medium"
+    }
+}
+
+fn normalize_text_fragment(s: &str, max_len: usize) -> String {
+    let compact = whitespace_regex().replace_all(s.trim(), " ").to_string();
+    if compact.chars().count() <= max_len {
+        compact
+    } else {
+        compact.chars().take(max_len).collect::<String>()
+    }
+}
+
+fn extract_ref_ids(line: &str) -> Vec<usize> {
+    evidence_regex()
+        .find_iter(line)
+        .filter_map(|m| {
+            m.as_str()
+                .trim_start_matches("[E")
+                .trim_end_matches(']')
+                .parse::<usize>()
+                .ok()
+        })
+        .collect()
+}
+
+fn remap_ref_ids(raw_ids: &[usize], max_id: usize) -> Vec<usize> {
+    if max_id == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for id in raw_ids {
+        let normalized = if *id == 0 {
+            1
+        } else if *id > max_id {
+            ((*id - 1) % max_id) + 1
+        } else {
+            *id
+        };
+        if seen.insert(normalized) {
+            out.push(normalized);
+        }
+        if out.len() >= 3 {
+            break;
+        }
+    }
+    out
 }
 
 fn confidence_for_refs(ref_ids: &[usize], by_id: &HashMap<usize, ActionSourceRef>) -> &'static str {
@@ -277,24 +338,44 @@ fn dedupe_sources(buckets: &[ActionBucketInput]) -> Vec<ActionSourceRef> {
     let mut out: Vec<ActionSourceRef> = Vec::new();
     for b in buckets {
         for s in &b.source_attribution {
+            let app_name = normalize_text_fragment(&s.app_name, 80);
+            let window_title = normalize_text_fragment(&s.window_title, 120);
+            let origin = normalize_text_fragment(&s.origin, 180);
+            let snippet = normalize_text_fragment(&s.snippet, 260);
+            if app_name.is_empty() || snippet.len() < 12 {
+                continue;
+            }
             let key = format!(
                 "{}|{}|{}|{}",
-                s.app_name.trim().to_lowercase(),
-                s.origin.trim().to_lowercase(),
+                app_name.to_lowercase(),
+                origin.to_lowercase(),
                 s.timestamp_epoch_secs.unwrap_or_default(),
-                s.snippet.trim().to_lowercase()
+                snippet.to_lowercase()
             );
             if seen.insert(key) {
-                out.push(s.clone());
+                out.push(ActionSourceRef {
+                    app_name,
+                    window_title,
+                    origin,
+                    timestamp_epoch_secs: s.timestamp_epoch_secs,
+                    snippet,
+                    confidence: normalize_confidence(&s.confidence).to_string(),
+                });
             }
         }
     }
+    out.sort_by_key(|s| s.timestamp_epoch_secs.unwrap_or(i64::MAX));
     out
 }
 
 fn append_evidence_appendix(markdown: &str, evidence: &[ActionSourceRef]) -> String {
+    let base = if let Some((head, _)) = markdown.split_once("\n## Evidence Appendix\n") {
+        head.trim_end().to_string()
+    } else {
+        markdown.trim_end().to_string()
+    };
     let mut out = String::new();
-    out.push_str(markdown.trim_end());
+    out.push_str(&base);
     out.push_str("\n\n## Evidence Appendix\n");
     if evidence.is_empty() {
         out.push_str("\n- [E1] source app: Unknown\n  - origin: unknown-origin\n  - timestamp: unknown\n  - snippet: No source metadata available\n  - confidence: Low\n");
@@ -311,19 +392,20 @@ fn append_evidence_appendix(markdown: &str, evidence: &[ActionSourceRef]) -> Str
         } else {
             ev.origin.as_str()
         };
+        let source_label = if ev.window_title.is_empty() {
+            ev.app_name.clone()
+        } else {
+            format!("{} — {}", ev.app_name, ev.window_title)
+        };
         let snippet = if ev.snippet.is_empty() {
             "n/a"
         } else {
             ev.snippet.as_str()
         };
-        let confidence = if ev.confidence.is_empty() {
-            "Medium"
-        } else {
-            ev.confidence.as_str()
-        };
+        let confidence = normalize_confidence(&ev.confidence);
         out.push_str(&format!(
             "\n- [E{label}] source app: {}\n  - origin: {origin}\n  - timestamp: {ts}\n  - snippet: {snippet}\n  - confidence: {confidence}\n",
-            ev.app_name
+            source_label
         ));
     }
     out
@@ -338,8 +420,13 @@ fn enforce_evidence_lock(markdown: &str, buckets: &[ActionBucketInput]) -> Strin
         .enumerate()
         .map(|(i, r)| (i + 1, r.clone()))
         .collect();
-    let default_ref = if refs.is_empty() { 1 } else { 1 };
+    let default_ref = 1usize;
     let mut next_ref: usize = 1;
+    let max_ref = refs.len().max(1);
+    let mut claim_count: usize = 0;
+    let mut claims_with_refs: usize = 0;
+    let mut injected_refs: usize = 0;
+    let mut remapped_refs: usize = 0;
 
     let mut lines_out: Vec<String> = Vec::new();
     for line in markdown.lines() {
@@ -352,16 +439,12 @@ fn enforce_evidence_lock(markdown: &str, buckets: &[ActionBucketInput]) -> Strin
             lines_out.push(line.to_string());
             continue;
         }
-        let ids: Vec<usize> = evidence_re
-            .find_iter(line)
-            .filter_map(|m| {
-                m.as_str()
-                    .trim_start_matches("[E")
-                    .trim_end_matches(']')
-                    .parse::<usize>()
-                    .ok()
-            })
-            .collect();
+        claim_count += 1;
+        let original_ids = extract_ref_ids(line);
+        let ids = remap_ref_ids(&original_ids, max_ref);
+        if !original_ids.is_empty() && ids != original_ids {
+            remapped_refs += 1;
+        }
 
         let mut updated = line.to_string();
         if ids.is_empty() {
@@ -373,18 +456,19 @@ fn enforce_evidence_lock(markdown: &str, buckets: &[ActionBucketInput]) -> Strin
                 id
             };
             updated = format!("{updated} [E{ref_id}] (Assumption)");
+            injected_refs += 1;
+        } else {
+            claims_with_refs += 1;
+            let canonical = ids
+                .iter()
+                .map(|id| format!("[E{id}]"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            updated = evidence_re.replace_all(&updated, "").to_string();
+            updated = format!("{} {}", updated.trim_end(), canonical).trim().to_string();
         }
         if !confidence_re.is_match(&updated) {
-            let ids2: Vec<usize> = evidence_re
-                .find_iter(&updated)
-                .filter_map(|m| {
-                    m.as_str()
-                        .trim_start_matches("[E")
-                        .trim_end_matches(']')
-                        .parse::<usize>()
-                        .ok()
-                })
-                .collect();
+            let ids2 = extract_ref_ids(&updated);
             let conf = confidence_for_refs(&ids2, &by_id);
             let prefix = if updated.trim_start().starts_with("- ") {
                 "- "
@@ -397,7 +481,17 @@ fn enforce_evidence_lock(markdown: &str, buckets: &[ActionBucketInput]) -> Strin
         lines_out.push(updated);
     }
 
-    append_evidence_appendix(&lines_out.join("\n"), &refs)
+    let coverage_pct = if claim_count == 0 {
+        100.0
+    } else {
+        (claims_with_refs as f64 / claim_count as f64) * 100.0
+    };
+    let mut with_integrity = lines_out.join("\n");
+    with_integrity.push_str(&format!(
+        "\n\n## Citation Integrity\n- Claims scanned: {claim_count}\n- Claims with original citations: {claims_with_refs}\n- Citation coverage before repair: {:.1}%\n- Citations injected: {injected_refs}\n- Citations remapped: {remapped_refs}\n",
+        coverage_pct
+    ));
+    append_evidence_appendix(&with_integrity, &refs)
 }
 
 pub fn run_action(
@@ -478,7 +572,7 @@ pub fn run_action(
         .unwrap_or_default()
         .as_secs();
 
-    let output_body = if action == ActionType::StakeholderBrief {
+    let output_body = if action != ActionType::Custom {
         enforce_evidence_lock(&output_body, buckets)
     } else {
         output_body

@@ -92,10 +92,16 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
 
   if (viewing) {
     const evidenceItems = parseEvidenceAppendix(viewing.output_body);
+    const evidenceIdSet = new Set(evidenceItems.map((item) => item.id));
+    const visibleEvidenceItems = hideLowConfidence
+      ? evidenceItems.filter((item) => !item.confidence.toLowerCase().includes("low"))
+      : evidenceItems;
     const filtered = filterMarkdownForTrust(viewing.output_body, {
       hideLowConfidence,
       showEvidencedOnly,
+      validEvidenceIds: evidenceIdSet,
     });
+    const danglingCitationCount = countDanglingCitations(viewing.output_body, evidenceIdSet);
     return (
       <section className="panel action-panel">
         <div className="action-panel__toolbar">
@@ -111,6 +117,12 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
           </span>
         </div>
         <div className="action-panel__output-body">
+          {danglingCitationCount > 0 ? (
+            <p className="action-panel__trust-warning">
+              Found {danglingCitationCount} dangling citation
+              {danglingCitationCount === 1 ? "" : "s"} that do not resolve to evidence.
+            </p>
+          ) : null}
           <div className="action-panel__trust-controls">
             <label className="action-panel__toggle">
               <input
@@ -129,12 +141,12 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
               Show only directly evidenced claims
             </label>
           </div>
-          <ActionMarkdown text={filtered} />
-          {evidenceItems.length > 0 ? (
-            <section className="action-evidence-panel">
-              <h3 className="action-evidence-panel__title">Evidence panel</h3>
+          <ActionMarkdown text={filtered} validEvidenceIds={evidenceIdSet} />
+          <section className="action-evidence-panel">
+            <h3 className="action-evidence-panel__title">Evidence panel</h3>
+            {visibleEvidenceItems.length > 0 ? (
               <div className="action-evidence-panel__list">
-                {evidenceItems.map((item) => (
+                {visibleEvidenceItems.map((item) => (
                   <article key={item.id} id={`evidence-${item.id}`} className="action-evidence-item">
                     <div className="action-evidence-item__top">
                       <span className="action-evidence-item__badge">[E{item.id}]</span>
@@ -147,8 +159,14 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
                   </article>
                 ))}
               </div>
-            </section>
-          ) : null}
+            ) : (
+              <p className="action-evidence-panel__empty">
+                {evidenceItems.length > 0 && hideLowConfidence
+                  ? "All evidence items are low confidence and currently hidden."
+                  : "No evidence references found in this output. Generate again to produce evidence-locked claims."}
+              </p>
+            )}
+          </section>
         </div>
       </section>
     );
@@ -246,8 +264,8 @@ export function ActionPanel({ sessionKey, buckets, selectedBucketIds }: Props) {
 }
 
 /** Simple markdown-to-HTML renderer for action output (handles headings, bold, bullets, paragraphs). */
-function ActionMarkdown({ text }: { text: string }) {
-  const html = markdownToHtml(text);
+function ActionMarkdown({ text, validEvidenceIds }: { text: string; validEvidenceIds: Set<number> }) {
+  const html = markdownToHtml(text, validEvidenceIds);
   return (
     <div
       className="action-markdown"
@@ -256,7 +274,7 @@ function ActionMarkdown({ text }: { text: string }) {
   );
 }
 
-function markdownToHtml(md: string): string {
+function markdownToHtml(md: string, validEvidenceIds: Set<number>): string {
   const escaped = md
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -273,29 +291,34 @@ function markdownToHtml(md: string): string {
       if (inList) { out.push("</ul>"); inList = false; }
       const level = trimmed.match(/^(#{1,4})/)?.[1].length ?? 1;
       const content = trimmed.replace(/^#{1,4}\s+/, "");
-      out.push(`<h${level + 1}>${applyInline(content)}</h${level + 1}>`);
+      out.push(`<h${level + 1}>${applyInline(content, validEvidenceIds)}</h${level + 1}>`);
     } else if (/^[-*]\s/.test(trimmed)) {
       if (!inList) { out.push("<ul>"); inList = true; }
       const content = trimmed.replace(/^[-*]\s+/, "");
-      out.push(`<li>${applyInline(content)}</li>`);
+      out.push(`<li>${applyInline(content, validEvidenceIds)}</li>`);
     } else if (/^\d+\.\s/.test(trimmed)) {
       if (inList) { out.push("</ul>"); inList = false; }
       const content = trimmed.replace(/^\d+\.\s+/, "");
-      out.push(`<p>${applyInline(content)}</p>`);
+      out.push(`<p>${applyInline(content, validEvidenceIds)}</p>`);
     } else if (trimmed === "") {
       if (inList) { out.push("</ul>"); inList = false; }
     } else {
       if (inList) { out.push("</ul>"); inList = false; }
-      out.push(`<p>${applyInline(trimmed)}</p>`);
+      out.push(`<p>${applyInline(trimmed, validEvidenceIds)}</p>`);
     }
   }
   if (inList) out.push("</ul>");
   return out.join("\n");
 }
 
-function applyInline(text: string): string {
+function applyInline(text: string, validEvidenceIds: Set<number>): string {
   return text
-    .replace(/\[E(\d+)\]/g, `<a href="#evidence-$1" class="action-citation">[E$1]</a>`)
+    .replace(/\[E(\d+)\]/g, (_, idRaw: string) => {
+      const id = Number(idRaw);
+      const isValid = validEvidenceIds.has(id);
+      const cls = isValid ? "action-citation" : "action-citation action-citation--dangling";
+      return `<a href="#evidence-${id}" class="${cls}">[E${id}]</a>`;
+    })
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/`(.+?)`/g, "<code>$1</code>");
@@ -344,7 +367,7 @@ function parseEvidenceAppendix(markdown: string): EvidenceItem[] {
 
 function filterMarkdownForTrust(
   markdown: string,
-  opts: { hideLowConfidence: boolean; showEvidencedOnly: boolean }
+  opts: { hideLowConfidence: boolean; showEvidencedOnly: boolean; validEvidenceIds: Set<number> }
 ): string {
   const appendixIdx = markdown.indexOf("## Evidence Appendix");
   const main = appendixIdx >= 0 ? markdown.slice(0, appendixIdx) : markdown;
@@ -354,12 +377,38 @@ function filterMarkdownForTrust(
     .filter((line) => {
       const t = line.trim();
       if (t === "" || t.startsWith("#")) return true;
-      if (opts.hideLowConfidence && t.includes("[Low]")) return false;
-      if (opts.showEvidencedOnly && !/\[E\d+\]/.test(t)) return false;
+      if (opts.hideLowConfidence && /\[low\]/i.test(t)) return false;
+      const ids = extractEvidenceIdsFromLine(t);
+      if (opts.showEvidencedOnly) {
+        if (ids.length === 0) return false;
+        if (ids.every((id) => !opts.validEvidenceIds.has(id))) return false;
+      }
       return true;
     })
     .join("\n")
     .trimEnd();
   if (!appendix) return filtered;
   return `${filtered}\n\n${appendix.trim()}`;
+}
+
+function extractEvidenceIdsFromLine(line: string): number[] {
+  const out: number[] = [];
+  const matches = line.matchAll(/\[E(\d+)\]/g);
+  for (const m of matches) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+function countDanglingCitations(markdown: string, validEvidenceIds: Set<number>): number {
+  const appendixIdx = markdown.indexOf("## Evidence Appendix");
+  const main = appendixIdx >= 0 ? markdown.slice(0, appendixIdx) : markdown;
+  let count = 0;
+  for (const line of main.split("\n")) {
+    for (const id of extractEvidenceIdsFromLine(line)) {
+      if (!validEvidenceIds.has(id)) count += 1;
+    }
+  }
+  return count;
 }
